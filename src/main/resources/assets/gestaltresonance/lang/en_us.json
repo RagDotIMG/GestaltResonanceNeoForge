@@ -1,0 +1,20 @@
+{
+  "itemGroup.gestaltresonance": "Gestalt Resonance",
+  "item.gestaltresonance.gestalt_shard": "Gestalt Shard",
+  "item.gestaltresonance.nether_tear": "Nether Tear",
+  "item.gestaltresonance.resonant_powder": "Resonant Powder",
+  "item.gestaltresonance.soul_vessel_empty": "Soul Vessel (Empty)",
+  "item.gestaltresonance.soul_vessel_filled": "Soul Vessel (Filled)",
+  "item.gestaltresonance.soul_vessel_fragile": "Soul Vessel (Fragile)",
+
+  "key.categories.gestaltresonance": "Gestalt Resonance",
+  "key.gestaltresonance.summon_toggle": "Summon/Desummon Gestalt",
+  "key.gestaltresonance.power_1": "Gestalt Power 1",
+  "key.gestaltresonance.power_2": "Gestalt Power 2",
+  "key.gestaltresonance.power_3": "Gestalt Power 3",
+  "effect.gestaltresonance.dormant_gestalt": "Dormant Gestalt",
+  "effect.gestaltresonance.invasive_soul": "Invasive Soul",
+
+  "death.attack.gestalt": "%1$s was struck down by a Gestalt",
+  "death.attack.gestalt.player": "%1$s was struck down by %2$s's Gestalt"
+}

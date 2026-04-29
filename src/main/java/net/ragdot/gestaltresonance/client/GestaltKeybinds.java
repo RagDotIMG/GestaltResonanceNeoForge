@@ -1,0 +1,198 @@
+package net.ragdot.gestaltresonance.client;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.entity.animal.horse.Llama;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.WanderingTrader;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.FishingRodItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.LeadItem;
+import net.minecraft.world.item.NameTagItem;
+import net.minecraft.world.item.PotionItem;
+import net.minecraft.world.item.ShearsItem;
+import net.minecraft.world.item.SpyglassItem;
+import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.util.Lazy;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.event.InputEvent;
+import net.ragdot.gestaltresonance.GestaltResonance;
+import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.common.network.StartGuardC2S;
+import net.ragdot.gestaltresonance.common.network.StopGuardC2S;
+import net.ragdot.gestaltresonance.common.network.ToggleSummonC2S;
+import org.lwjgl.glfw.GLFW;
+
+public class GestaltKeybinds {
+
+    public static final String CATEGORY = "key.categories.gestaltresonance";
+
+    public static final Lazy<KeyMapping> SUMMON_TOGGLE = Lazy.of(() -> new KeyMapping(
+            "key.gestaltresonance.summon_toggle",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
+            CATEGORY
+    ));
+
+    public static final Lazy<KeyMapping> POWER_1 = Lazy.of(() -> new KeyMapping(
+            "key.gestaltresonance.power_1",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_Z,
+            CATEGORY
+    ));
+
+    public static final Lazy<KeyMapping> POWER_2 = Lazy.of(() -> new KeyMapping(
+            "key.gestaltresonance.power_2",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_X,
+            CATEGORY
+    ));
+
+    public static final Lazy<KeyMapping> POWER_3 = Lazy.of(() -> new KeyMapping(
+            "key.gestaltresonance.power_3",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_C,
+            CATEGORY
+    ));
+
+    // True after sending StartGuardC2S; prevents spam before TriggerGuardS2C arrives.
+    private static boolean guardInitiated = false;
+
+    public static void register(RegisterKeyMappingsEvent event) {
+        event.register(SUMMON_TOGGLE.get());
+        event.register(POWER_1.get());
+        event.register(POWER_2.get());
+        event.register(POWER_3.get());
+    }
+
+    public static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        while (SUMMON_TOGGLE.get().consumeClick()) {
+            PacketDistributor.sendToServer(new ToggleSummonC2S());
+        }
+        while (POWER_1.get().consumeClick()) {
+            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 1 pressed"), false);
+        }
+        while (POWER_2.get().consumeClick()) {
+            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 2 pressed"), false);
+        }
+        while (POWER_3.get().consumeClick()) {
+            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 3 pressed"), false);
+        }
+
+        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+
+        // When right-click released: stop guard and reset the initiated flag
+        if (!mc.options.keyUse.isDown()) {
+            guardInitiated = false;
+            if (state.isGuarding()) {
+                PacketDistributor.sendToServer(new StopGuardC2S());
+            }
+        }
+
+        // Once the server confirms guard is active, clear the pending flag
+        if (state.isGuarding()) {
+            guardInitiated = false;
+        }
+
+        LedgeGrabClientHandler.tick();
+    }
+
+    /**
+     * Fires each time the USE key mapping is triggered (including when looking at nothing).
+     * If the gestalt is summoned and the interaction is low-priority, cancel it and start guard.
+     */
+    public static void onInteractionKeyMappingTriggered(InputEvent.InteractionKeyMappingTriggered event) {
+        if (!event.isUseItem()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned()) return;
+
+        // Already guarding or waiting for server confirmation: don't cancel here.
+        // GestaltGuardEvents.cancelIfGuarding handles the server-side PlayerInteractEvent,
+        // which correctly suppresses the arm swing. Canceling InteractionKeyMappingTriggered
+        // here instead causes the arm-swing animation to play on repeat.
+        if (state.isGuarding() || guardInitiated) return;
+
+        // High-priority items always pass through to vanilla
+        if (isHighPriorityItem(mc.player.getMainHandItem())) return;
+
+        // High-priority targets pass through
+        if (mc.hitResult instanceof EntityHitResult ehr && isHighPriorityEntity(ehr.getEntity())) return;
+        if (mc.hitResult instanceof BlockHitResult bhr
+                && mc.level != null
+                && isInteractiveBlock(mc.level, bhr.getBlockPos())) return;
+
+        // Low-priority interaction — cancel it and start guard
+        event.setCanceled(true);
+        guardInitiated = true;
+        PacketDistributor.sendToServer(new StartGuardC2S());
+    }
+
+    // ── Priority helpers (client-side mirror of GestaltGuardEvents) ───────────
+
+    private static boolean isHighPriorityItem(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        Item item = stack.getItem();
+        if (stack.has(DataComponents.FOOD)) return true;
+        if (item instanceof PotionItem) return true;
+        if (stack.is(Items.MILK_BUCKET)) return true;
+        if (item instanceof BowItem || item instanceof CrossbowItem || item instanceof TridentItem) return true;
+        if (stack.is(Items.ENDER_PEARL) || stack.is(Items.SNOWBALL) || stack.is(Items.EGG)) return true;
+        if (item instanceof FishingRodItem) return true;
+        if (item instanceof LeadItem || item instanceof NameTagItem) return true;
+        if (item instanceof SpyglassItem || item instanceof ShearsItem) return true;
+        if (stack.is(Items.FLINT_AND_STEEL) || stack.is(Items.FIRE_CHARGE)) return true;
+        if (stack.is(Items.MAP) || stack.is(Items.FILLED_MAP)) return true;
+        return false;
+    }
+
+    private static boolean isHighPriorityEntity(Entity entity) {
+        return entity instanceof Villager
+                || entity instanceof WanderingTrader
+                || entity instanceof AbstractHorse
+                || entity instanceof Llama
+                || entity instanceof ItemFrame
+                || entity instanceof ArmorStand
+                || entity instanceof Painting;
+    }
+
+    private static boolean isInteractiveBlock(Level level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof MenuProvider) return true;
+        BlockState state = level.getBlockState(pos);
+        Block block = state.getBlock();
+        if (block instanceof EnderChestBlock) return true;
+        if (state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS) || state.is(BlockTags.FENCE_GATES)) return true;
+        if (state.is(BlockTags.BEDS)) return true;
+        if (block instanceof ButtonBlock || block instanceof LeverBlock) return true;
+        return false;
+    }
+}

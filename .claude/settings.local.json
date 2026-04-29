@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(javap -p -c -classpath /home/rag/IdeaProjects/GestaltResonanceNeoForge/build/moddev/artifacts/neoforge-21.1.226.jar net.minecraft.world.entity.Entity)",
+      "Bash(javap -p -c -classpath /home/rag/IdeaProjects/GestaltResonanceNeoForge/build/moddev/artifacts/neoforge-21.1.226.jar net.minecraft.world.level.gameevent.vibrations.VibrationSystem)",
+      "Bash(javap -p -c -classpath /home/rag/IdeaProjects/GestaltResonanceNeoForge/build/moddev/artifacts/neoforge-21.1.226.jar 'net.minecraft.world.level.gameevent.vibrations.VibrationSystem$Listener')",
+      "Bash(javap -p -c -classpath /home/rag/IdeaProjects/GestaltResonanceNeoForge/build/moddev/artifacts/neoforge-21.1.226.jar 'net.minecraft.world.level.gameevent.vibrations.VibrationSystem$User')",
+      "Bash(xargs -I {} find {} -type d)",
+      "Read(//tmp/**)",
+      "Bash(jar tf *)",
+      "Bash(./gradlew compileJava -Pjavac.compilerArgs=-Xlint:deprecation)",
+      "Bash(./gradlew compileJava --rerun-tasks)",
+      "Bash(./gradlew compileJava --rerun-tasks -Dorg.gradle.warning.mode=all -Pjavac.compilerArgs=\"-Xlint:deprecation\")",
+      "Bash(./gradlew compileJava --rerun-tasks -I /tmp/lint_check.gradle)"
+    ]
+  }
+}

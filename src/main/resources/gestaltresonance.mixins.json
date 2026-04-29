@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "net.ragdot.gestaltresonance.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["EntityMixin", "ServerPlayerMixin"],
+  "client": ["LivingEntitySwingMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

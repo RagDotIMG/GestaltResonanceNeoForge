@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:smelting",
+  "ingredient": {
+    "item": "gestaltresonance:nether_tear"
+  },
+  "result": {
+    "id": "gestaltresonance:resonant_powder",
+    "count": 1
+  },
+  "experience": 0.5,
+  "cookingtime": 200
+}

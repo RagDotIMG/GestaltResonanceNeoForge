@@ -1,0 +1,34 @@
+{
+  "gestalt.birth": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.birth",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_birth" ]
+  },
+  "gestalt.dissolve": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.dissolve",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_dissolve" ]
+  },
+  "gestalt.summon": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.summon",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_summon" ]
+  },
+  "gestalt.dismiss": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.dismiss",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_dismiss" ]
+  },
+  "gestalt.awaken": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.awaken",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_awaken" ]
+  },
+  "gestalt.guardbreak": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.guardbreak",
+    "sounds": [ "gestaltresonance:gestalt/guardbreak" ]
+  },
+  "gestalt.punch": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.punch",
+    "sounds": [ "gestaltresonance:gestalt/punch" ]
+  },
+  "gestalt.levelup": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.levelup",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_levelup" ]
+  }
+}
