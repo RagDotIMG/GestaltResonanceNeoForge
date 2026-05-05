@@ -6,7 +6,8 @@ import net.minecraft.resources.ResourceLocation;
  * Central registry of known Gestalt IDs.
  */
 public final class GestaltIds {
-    public static final ResourceLocation AMEN_BREAK = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "amen_break");
+    public static final ResourceLocation AMEN_BREAK  = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "amen_break");
+    public static final ResourceLocation SPILLWAYS   = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "spillways");
 
     private GestaltIds() {}
 }

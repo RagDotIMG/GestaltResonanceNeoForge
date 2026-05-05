@@ -16,9 +16,16 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.ragdot.gestaltresonance.client.GestaltCooldownHud;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
+import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
+import net.ragdot.gestaltresonance.client.SoulProjectionClientInput;
+import net.ragdot.gestaltresonance.client.entity.BodyDoubleRenderer;
+import net.ragdot.gestaltresonance.common.GestaltEntities;
+import net.ragdot.gestaltresonance.client.GestaltResonanceHud;
 import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltXpOverlay;
+import net.ragdot.gestaltresonance.client.entity.PrimedBlockRenderer;
 import net.ragdot.gestaltresonance.client.gestalt.AmenBreakModel;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.client.GestaltPlayerLayer;
@@ -36,20 +43,55 @@ public class GestaltResonanceClient {
         modEventBus.addListener(GestaltKeybinds::register);
         modEventBus.addListener(GestaltResonanceClient::registerLayerDefinitions);
         modEventBus.addListener(GestaltResonanceClient::addPlayerLayers);
+        modEventBus.addListener(GestaltResonanceClient::registerEntityRenderers);
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
         GestaltResonance.LOGGER.info("GestaltResonance client setup");
         NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onClientTick);
         NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onInteractionKeyMappingTriggered);
+        NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onLivingJump);
         NeoForge.EVENT_BUS.addListener(GestaltFirstPersonRenderer::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceClient::onClientLevelTick);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceClient::onMovementInput);
         NeoForge.EVENT_BUS.addListener(GestaltXpOverlay::onRenderGuiLayer);
+        NeoForge.EVENT_BUS.addListener(GestaltCooldownHud::onRenderGuiLayer);
+        NeoForge.EVENT_BUS.addListener(GestaltResonanceHud::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientHandler::onCameraAngles);
+        // Soul projection client-side input gating (block break/place/use) and movement prediction
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onLeftClickBlock);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickItem);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickEmpty);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickEntity);
+        NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onMovementInput);
 
         // Bridge: when the network handler observes a chain transition, reset the
         // client-side animation state directly. Avoids the IDLE-skip race condition.
         GestaltNetworking.onChainTransitionCallback = GestaltModel::notifyChainEnd;
+
+        // Bridge: fall break impact packet → gestalt shake VFX.
+        GestaltNetworking.onFallBreakImpactCallback = uuid -> {
+            Minecraft mc = Minecraft.getInstance();
+            long tick = (mc.level != null) ? mc.level.getGameTime() : 0L;
+            GestaltPlayerLayer.triggerImpactShake(uuid, tick);
+        };
+
+        // Bridge: soul projection state change → camera shake feedback.
+        GestaltNetworking.onSoulProjectionStateCallback = projecting -> {
+            if (projecting) SoulProjectionClientHandler.triggerActivationShake();
+        };
+
+        // Bridge: soul projection yank → shake intensity + sound vary by exit type.
+        GestaltNetworking.onSoulProjectionYankCallback = SoulProjectionClientHandler::onYank;
+
+        // Bridge: hit-chain impact packet → single wind-charge gust particle.
+        GestaltNetworking.onHitParticlesCallback = packet -> {
+            net.minecraft.client.multiplayer.ClientLevel level = Minecraft.getInstance().level;
+            if (level == null) return;
+            level.addParticle(net.minecraft.core.particles.ParticleTypes.GUST,
+                    packet.x(), packet.y(), packet.z(), 0.0, 0.0, 0.0);
+        };
     }
 
     /** Freeze all movement input when ledge grabbing, before vanilla processes it. */
@@ -78,7 +120,25 @@ public class GestaltResonanceClient {
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             state.tickSummonProgress();
             GestaltPlayerLayer.tickSmoothedYaw(player);
+
+            // Client-side travel progression for charged strike. Server is authoritative for the
+            // strike trigger (transitions to HIT_3 via SyncAttackActionS2C). The client mirrors
+            // the per-tick advancement so renderers can lerp smoothly toward the target.
+            if (state.getAction() == net.ragdot.gestaltresonance.common.GestaltAction.CHARGED_STRIKE_TRAVEL) {
+                int tier = state.getChargedStrikeSpeedTier();
+                if (tier >= 1 && tier < net.ragdot.gestaltresonance.common.GestaltCosts.CHARGED_STRIKE_TRAVEL_SPEED_BY_SPD.length) {
+                    double speed = net.ragdot.gestaltresonance.common.GestaltCosts.CHARGED_STRIKE_TRAVEL_SPEED_BY_SPD[tier];
+                    if (speed > 0) {
+                        state.setChargedStrikeTraveled(state.getChargedStrikeTraveled() + speed);
+                    }
+                }
+            }
         }
+    }
+
+    private static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(GestaltEntities.BODY_DOUBLE.get(), BodyDoubleRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.PRIMED_BLOCK.get(), PrimedBlockRenderer::new);
     }
 
     private static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {

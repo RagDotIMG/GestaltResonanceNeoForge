@@ -8,6 +8,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -36,7 +37,7 @@ public abstract class LivingEntitySwingMixin {
 
         if (!mc.options.keyAttack.isDown()) return;
         if (!(mc.hitResult instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return;
-        if (Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) > 3.5) return;
+        if (Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) > GestaltCosts.mineRangeFor(state)) return;
 
         ci.cancel();
     }

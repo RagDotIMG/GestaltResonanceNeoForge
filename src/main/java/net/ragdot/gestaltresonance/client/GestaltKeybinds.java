@@ -37,16 +37,30 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.common.util.Lazy;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.common.util.Lazy;
+import net.neoforged.neoforge.event.entity.living.LivingEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraft.client.player.LocalPlayer;
 import net.ragdot.gestaltresonance.GestaltResonance;
+import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
+import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
+import net.ragdot.gestaltresonance.common.network.PowerActivateC2S;
+import net.ragdot.gestaltresonance.common.network.SoulProjectionActivateC2S;
+import net.ragdot.gestaltresonance.common.network.SoulProjectionExitC2S;
+import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
+import net.ragdot.gestaltresonance.common.network.StartChannelXpC2S;
 import net.ragdot.gestaltresonance.common.network.StartGuardC2S;
+import net.ragdot.gestaltresonance.common.network.StopChannelXpC2S;
 import net.ragdot.gestaltresonance.common.network.StopGuardC2S;
+import net.ragdot.gestaltresonance.common.network.ThrowInputC2S;
 import net.ragdot.gestaltresonance.common.network.ToggleSummonC2S;
 import org.lwjgl.glfw.GLFW;
 
@@ -81,6 +95,12 @@ public class GestaltKeybinds {
     // True after sending StartGuardC2S; prevents spam before TriggerGuardS2C arrives.
     private static boolean guardInitiated = false;
 
+    // Sneak+G chord state. We disambiguate tap (open management screen) from hold (XP channel)
+    // using a 10-tick threshold. The 10 ticks are now client-side (windup happens here, not on server).
+    private static final int CHANNEL_WINDUP_TICKS = 10;
+    private static int sneakGHoldTicks = 0;
+    private static boolean channelInitiated = false;
+
     public static void register(RegisterKeyMappingsEvent event) {
         event.register(SUMMON_TOGGLE.get());
         event.register(POWER_1.get());
@@ -92,11 +112,40 @@ public class GestaltKeybinds {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
+        boolean sneakHeld = mc.options.keyShift.isDown();
+        boolean gHeld = SUMMON_TOGGLE.get().isDown();
+        boolean chordHeld = sneakHeld && gHeld;
+        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+
+        if (chordHeld) {
+            sneakGHoldTicks++;
+            if (sneakGHoldTicks == CHANNEL_WINDUP_TICKS && !channelInitiated) {
+                PacketDistributor.sendToServer(new StartChannelXpC2S());
+                channelInitiated = true;
+            }
+        } else {
+            // Chord released. Decide between channel-stop and tap-open.
+            if (channelInitiated) {
+                PacketDistributor.sendToServer(new StopChannelXpC2S());
+                channelInitiated = false;
+            } else if (sneakGHoldTicks > 0 && sneakGHoldTicks < CHANNEL_WINDUP_TICKS) {
+                net.ragdot.gestaltresonance.client.gui.GestaltManagementScreen.openIfEligible();
+            }
+            sneakGHoldTicks = 0;
+        }
+
+        // Drain G clicks: priority order — exit projection > activate projection > toggle summon.
         while (SUMMON_TOGGLE.get().consumeClick()) {
-            PacketDistributor.sendToServer(new ToggleSummonC2S());
+            if (state.isSoulProjecting()) {
+                PacketDistributor.sendToServer(new SoulProjectionExitC2S(SoulProjectionExitType.EMERGENCY.toByte()));
+            } else if (state.isGuarding()) {
+                PacketDistributor.sendToServer(new SoulProjectionActivateC2S());
+            } else if (!sneakHeld) {
+                PacketDistributor.sendToServer(new ToggleSummonC2S());
+            }
         }
         while (POWER_1.get().consumeClick()) {
-            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 1 pressed"), false);
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte()));
         }
         while (POWER_2.get().consumeClick()) {
             mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 2 pressed"), false);
@@ -105,12 +154,10 @@ public class GestaltKeybinds {
             mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 3 pressed"), false);
         }
 
-        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-
         // When right-click released: stop guard and reset the initiated flag
         if (!mc.options.keyUse.isDown()) {
             guardInitiated = false;
-            if (state.isGuarding()) {
+            if (state.isGuarding() && !state.isSoulProjecting()) {
                 PacketDistributor.sendToServer(new StopGuardC2S());
             }
         }
@@ -120,6 +167,23 @@ public class GestaltKeybinds {
             guardInitiated = false;
         }
 
+        // Halt any in-progress block destruction while the gestalt owns left-click. Vanilla
+        // continues an already-started destroy each tick from keyAttack.isDown(); cancelling the
+        // initial press isn't enough if the user was already mining when the action started.
+        GestaltAction currentAction = state.getAction();
+        if (currentAction == GestaltAction.HIT_1
+                || currentAction == GestaltAction.HIT_2
+                || currentAction == GestaltAction.HIT_3
+                || currentAction == GestaltAction.CHARGED_STRIKE_WINDUP
+                || currentAction == GestaltAction.CHARGED_STRIKE_TRAVEL
+                || currentAction == GestaltAction.POWER_1G_WINDUP) {
+            if (mc.gameMode != null && mc.gameMode.isDestroying()) {
+                mc.gameMode.stopDestroyBlock();
+            }
+        }
+
+        SoulProjectionClientHandler.tick();
+        WallSlideClientHandler.tick();
         LedgeGrabClientHandler.tick();
     }
 
@@ -128,12 +192,35 @@ public class GestaltKeybinds {
      * If the gestalt is summoned and the interaction is low-priority, cancel it and start guard.
      */
     public static void onInteractionKeyMappingTriggered(InputEvent.InteractionKeyMappingTriggered event) {
-        if (!event.isUseItem()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
         PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
+        if (state.isSoulProjecting()) return;
+
+        // Suppress vanilla attack (and the block-break it would start) while the gestalt is
+        // in any combat action — chain hits, charged-strike windup, travel, or strike. The
+        // chain advances via keyAttack.consumeClick() in GestaltAttackClientEvents, which is
+        // independent of this event, so chain advancement keeps working.
+        if (event.isAttack()) {
+            GestaltAction action = state.getAction();
+            if (action == GestaltAction.HIT_1
+                    || action == GestaltAction.HIT_2
+                    || action == GestaltAction.HIT_3
+                    || action == GestaltAction.CHARGED_STRIKE_WINDUP
+                    || action == GestaltAction.CHARGED_STRIKE_TRAVEL
+                    || action == GestaltAction.POWER_1G_WINDUP) {
+                event.setSwingHand(false);
+                event.setCanceled(true);
+            }
+            return;
+        }
+
+        if (!event.isUseItem()) return;
+
+        // Block guard initiation during power windups — the power has priority over guard.
+        if (state.getAction() == GestaltAction.POWER_1G_WINDUP) return;
 
         // Already guarding or waiting for server confirmation: don't cancel here.
         // GestaltGuardEvents.cancelIfGuarding handles the server-side PlayerInteractEvent,
@@ -182,6 +269,32 @@ public class GestaltKeybinds {
                 || entity instanceof ItemFrame
                 || entity instanceof ArmorStand
                 || entity instanceof Painting;
+    }
+
+    /**
+     * Fires after vanilla {@code jumpFromGround} has already overwritten vy with JUMP_POWER (0.42).
+     * If the player is sneaking and the gestalt is summoned + idle, replace the vanilla jump with
+     * the throw velocity. Vanilla jump only sets vy, leaving horizontal velocity intact, but our
+     * throw needs full control over all three components — so we compute and apply our own here,
+     * then notify the server which will sync to other clients.
+     */
+    public static void onLivingJump(LivingEvent.LivingJumpEvent event) {
+        if (!(event.getEntity() instanceof LocalPlayer player)) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != player) return;
+        if (!mc.options.keyShift.isDown()) return;
+
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned() || state.getAction() != GestaltAction.IDLE) return;
+
+        Vec3 velocity = GestaltThrowEvents.computeThrowVelocity(player, state);
+        player.setDeltaMovement(velocity);
+
+        state.setThrowOrigin(player.getX(), player.getY(), player.getZ(), player.yBodyRot);
+        state.setAction(GestaltAction.THROW);
+        player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+
+        PacketDistributor.sendToServer(new ThrowInputC2S());
     }
 
     private static boolean isInteractiveBlock(Level level, BlockPos pos) {

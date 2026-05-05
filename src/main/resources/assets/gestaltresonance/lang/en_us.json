@@ -7,6 +7,9 @@
   "item.gestaltresonance.soul_vessel_filled": "Soul Vessel (Filled)",
   "item.gestaltresonance.soul_vessel_fragile": "Soul Vessel (Fragile)",
 
+  "entity.gestaltresonance.body_double": "Body Double",
+  "gestalt.gestaltresonance.spillways": "Spillways",
+
   "key.categories.gestaltresonance": "Gestalt Resonance",
   "key.gestaltresonance.summon_toggle": "Summon/Desummon Gestalt",
   "key.gestaltresonance.power_1": "Gestalt Power 1",
@@ -16,5 +19,7 @@
   "effect.gestaltresonance.invasive_soul": "Invasive Soul",
 
   "death.attack.gestalt": "%1$s was struck down by a Gestalt",
-  "death.attack.gestalt.player": "%1$s was struck down by %2$s's Gestalt"
+  "death.attack.gestalt.player": "%1$s was struck down by %2$s's Gestalt",
+
+  "gestalt.gestaltresonance.amen_break": "Amen Break"
 }

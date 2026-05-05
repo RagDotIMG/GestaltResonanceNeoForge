@@ -22,5 +22,13 @@ public enum GestaltAction {
     /** Gestalt is performing the second hit of a melee chain. */
     HIT_2,
     /** Gestalt is performing the third (final) hit of a melee chain. */
-    HIT_3
+    HIT_3,
+    /** Player is holding left-click to wind up a charged strike. */
+    CHARGED_STRIKE_WINDUP,
+    /** Charged strike fired; gestalt is homing toward a target entity. */
+    CHARGED_STRIKE_TRAVEL,
+    /** Player is sliding down a wall face; gestalt locks to the wall. */
+    WALL_SLIDE,
+    /** Amen Break Power 1G — guard-combo windup leading to a delayed-explosion strike. */
+    POWER_1G_WINDUP
 }

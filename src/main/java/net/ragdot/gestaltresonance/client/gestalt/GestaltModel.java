@@ -10,6 +10,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.common.GestaltAction;
+import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 
@@ -56,6 +57,12 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
 
     /** Optional — return null if this gestalt doesn't support the third melee hit. */
     @Nullable protected AnimationDefinition hit3Animation() { return null; }
+
+    /** Optional — return null if this gestalt doesn't support the charged-strike windup pose. */
+    @Nullable protected AnimationDefinition windupAnimation() { return null; }
+
+    /** Optional — return null if this gestalt doesn't support a swim pose. */
+    @Nullable protected AnimationDefinition swimAnimation() { return null; }
 
     // Static so chain transitions from the network handler can reset animation state
     // for any GestaltModel instance (one per gestalt subclass) sharing the same player.
@@ -153,6 +160,23 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
             data.prevHitAction = GestaltAction.IDLE;
         }
 
+        // Charged-strike windup pose, also held during the travel phase so the gestalt
+        // doesn't drop into idle while flying toward the target.
+        AnimationDefinition windupAnim = windupAnimation();
+        boolean winding = state.getAction() == GestaltAction.CHARGED_STRIKE_WINDUP
+                || state.getAction() == GestaltAction.CHARGED_STRIKE_TRAVEL;
+        if (winding && windupAnim != null) {
+            if (!data.windupState.isStarted()) {
+                data.windupState.start((int) ageInTicks);
+            }
+            data.windupState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.windupState, windupAnim, ageInTicks);
+            return;
+        }
+        if (!winding && data.windupState.isStarted()) {
+            data.windupState.stop();
+        }
+
         // Idle always progresses for phase continuity across transitions
         if (!data.idleState.isStarted()) {
             data.idleState.start(0);
@@ -181,13 +205,41 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         }
         data.wasGuarding = guarding;
 
-        // Play: mining > guard > idle
+        // Throw
+        boolean throwing = state.getAction() == GestaltAction.THROW;
+        AnimationDefinition throwAnim = throwAnimation();
+        if (throwing && !data.wasThrowing && throwAnim != null) {
+            data.throwState.start((int) ageInTicks);
+        }
+        if (!throwing && data.wasThrowing && data.throwState.isStarted()) {
+            data.throwState.stop();
+        }
+        data.wasThrowing = throwing;
+
+        // Swim
+        boolean swimming = player.isSwimming();
+        AnimationDefinition swimAnim = swimAnimation();
+        if (swimming && !data.wasSwimming && swimAnim != null) {
+            data.swimState.start((int) ageInTicks);
+        }
+        if (!swimming && data.wasSwimming && data.swimState.isStarted()) {
+            data.swimState.stop();
+        }
+        data.wasSwimming = swimming;
+
+        // Play: mining > throw > guard > swim > idle
         if (mining) {
             data.miningState.updateTime(ageInTicks, 1.0F);
             this.animate(data.miningState, miningAnim, ageInTicks);
+        } else if (throwing && throwAnim != null && data.throwState.isStarted()) {
+            data.throwState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.throwState, throwAnim, ageInTicks);
         } else if (guarding && guardAnim != null && data.guardState.isStarted()) {
             data.guardState.updateTime(ageInTicks, 1.0F);
             this.animate(data.guardState, guardAnim, ageInTicks);
+        } else if (swimming && swimAnim != null && data.swimState.isStarted()) {
+            data.swimState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.swimState, swimAnim, ageInTicks);
         } else {
             this.animate(data.idleState, idleAnimation(), ageInTicks);
         }
@@ -204,24 +256,35 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
 
     private static boolean isMining(AbstractClientPlayer player) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player != player) return false;
-        if (!mc.options.keyAttack.isDown()) return false;
-        if (!(mc.hitResult instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return false;
-        return Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) <= 3.5;
+        if (mc.player == player) {
+            // Local player: detect via input so the animation has zero round-trip lag.
+            if (!mc.options.keyAttack.isDown()) return false;
+            if (!(mc.hitResult instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return false;
+            PlayerGestaltState localState = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            return Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) <= GestaltCosts.mineRangeFor(localState);
+        }
+        // Remote players: use server-synced state pushed via SyncMiningStateS2C.
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        return state.isMining();
     }
 
     private static class AnimData {
         final AnimationState introState  = new AnimationState();
         final AnimationState idleState   = new AnimationState();
         final AnimationState guardState  = new AnimationState();
+        final AnimationState throwState  = new AnimationState();
         final AnimationState grabState   = new AnimationState();
         final AnimationState miningState = new AnimationState();
         final AnimationState hitState    = new AnimationState();
+        final AnimationState windupState = new AnimationState();
+        final AnimationState swimState   = new AnimationState();
         float introStartedAt   = -1.0F;
         boolean wasSummoned       = false;
         boolean wasGuarding       = false;
+        boolean wasThrowing       = false;
         boolean wasLedgeGrabbing  = false;
         boolean wasMining         = false;
+        boolean wasSwimming       = false;
         GestaltAction prevHitAction = GestaltAction.IDLE;
     }
 }

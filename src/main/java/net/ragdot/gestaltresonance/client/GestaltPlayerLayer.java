@@ -19,8 +19,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.GestaltResonance;
-import net.ragdot.gestaltresonance.client.gestalt.AmenBreakModel;
+import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.common.GestaltAction;
+import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 
@@ -41,8 +42,23 @@ import java.util.UUID;
  */
 public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
-    private static final ResourceLocation TEXTURE =
+    /** Fallback texture if the gestalt has no skin definitions registered. */
+    private static final ResourceLocation FALLBACK_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "textures/gestalt/amen_break.png");
+
+    /** Returns the texture to use for the given player's currently selected skin, with fallbacks. */
+    public static ResourceLocation textureFor(PlayerGestaltState state) {
+        ResourceLocation gestaltId = state.getGestaltId();
+        ResourceLocation selected = state.getSelectedSkin();
+        net.ragdot.gestaltresonance.common.skin.GestaltSkin skin = null;
+        if (selected != null && !selected.equals(PlayerGestaltState.NONE)) {
+            skin = net.ragdot.gestaltresonance.common.skin.GestaltSkinRegistry.getSkin(gestaltId, selected);
+        }
+        if (skin == null) {
+            skin = net.ragdot.gestaltresonance.common.skin.GestaltSkinRegistry.getDefaultSkin(gestaltId);
+        }
+        return skin != null ? skin.texture() : FALLBACK_TEXTURE;
+    }
 
     // Offset behind the player (negative Z = behind) and slightly to the right (positive X)
     private static final float OFFSET_X = 0.6F;
@@ -56,6 +72,40 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
     // Per-player smoothed body yaw. Stores {previousTickSmoothed, currentTickSmoothed}.
     // Updated once per game tick; interpolated in render using partialTick.
     private static final Map<UUID, float[]> smoothedYawMap = new HashMap<>();
+
+    // ── Fall-break impact shake (client-side cosmetic) ──
+    /** Game tick at which a fall break shake started, per player UUID. */
+    private static final Map<UUID, Long> impactShakeStartTick = new HashMap<>();
+    /** Duration of the shake decay in ticks (ranges within 5–8 per spec). */
+    private static final int IMPACT_SHAKE_DURATION = 7;
+    /** Peak shake amplitude in blocks at impact instant; decays linearly to 0. */
+    private static final float IMPACT_SHAKE_AMPLITUDE = 0.18f;
+
+    /** Mark the given player's gestalt as just-impacted; renderers will shake it briefly. */
+    public static void triggerImpactShake(UUID playerUuid, long currentTick) {
+        impactShakeStartTick.put(playerUuid, currentTick);
+    }
+
+    /**
+     * Returns the current XYZ shake offset for the given player, or [0,0,0] if no shake is active.
+     * The shake decays linearly over {@link #IMPACT_SHAKE_DURATION} ticks. The output array is a
+     * fresh allocation per call — small enough that this is fine for its rare use.
+     */
+    public static float[] getShakeOffset(UUID playerUuid, long currentTick, float partialTick) {
+        Long start = impactShakeStartTick.get(playerUuid);
+        if (start == null) return new float[]{0f, 0f, 0f};
+        float elapsed = (currentTick - start) + partialTick;
+        if (elapsed >= IMPACT_SHAKE_DURATION) {
+            impactShakeStartTick.remove(playerUuid);
+            return new float[]{0f, 0f, 0f};
+        }
+        float intensity = 1f - elapsed / IMPACT_SHAKE_DURATION;
+        float seed = elapsed * 11.7f + playerUuid.hashCode() * 0.001f;
+        float dx = (float) Math.sin(seed * 7.3f) * IMPACT_SHAKE_AMPLITUDE * intensity;
+        float dy = (float) Math.sin(seed * 9.1f) * IMPACT_SHAKE_AMPLITUDE * 0.5f * intensity;
+        float dz = (float) Math.sin(seed * 8.5f) * IMPACT_SHAKE_AMPLITUDE * intensity;
+        return new float[]{dx, dy, dz};
+    }
 
     // Ledge-grab offsets: gestalt moves to the wall side of the player.
     private static final float LEDGE_GRAB_OFFSET_X = OFFSET_X;
@@ -72,7 +122,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
     private static final float ATTACK_OFFSET_Z = -1.0F;
 
 
-    private final AmenBreakModel gestaltModel;
+    private final GestaltModel gestaltModel;
 
     /**
      * Call once per game tick per player. When the gestalt is idle, advances the smoothed body
@@ -93,7 +143,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 player.getData(net.ragdot.gestaltresonance.common.GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
         float newSmoothed;
-        if (state.isIdle()) {
+        if (state.isIdle() || state.getAction() == GestaltAction.THROW) {
             float current = yaws[1];
             // Shortest-path delta to avoid spinning the long way around
             float delta = Mth.wrapDegrees(targetYaw - current);
@@ -108,7 +158,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
     public GestaltPlayerLayer(
             RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> renderer,
-            AmenBreakModel model) {
+            GestaltModel model) {
         super(renderer);
         this.gestaltModel = model;
     }
@@ -125,14 +175,26 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         if (progress <= 0.001f) return;
 
         GestaltAction action = state.getAction();
-        boolean grabbing = action == GestaltAction.LEDGE_GRAB;
-        boolean guarding = action == GestaltAction.GUARD;
-        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3;
-        boolean mining = !grabbing && !guarding && !attacking && isLocalPlayerMining(player);
+        // Throw and charged-strike travel are rendered in world space by GestaltFirstPersonRenderer.
+        if (action == GestaltAction.THROW) return;
+        if (action == GestaltAction.CHARGED_STRIKE_TRAVEL) return;
+        // Charged-strike HIT_3 (the strike phase) renders at the target via the world-space path too.
+        if (action == GestaltAction.HIT_3 && state.getChargedStrikeTargetEntityId() >= 0) return;
 
-        float xOffset = grabbing ? LEDGE_GRAB_OFFSET_X : attacking ? ATTACK_OFFSET_X : (guarding || mining) ? GUARD_OFFSET_X : OFFSET_X;
-        float yOffset = grabbing ? LEDGE_GRAB_OFFSET_Y : OFFSET_Y;
-        float zOffset = grabbing ? LEDGE_GRAB_OFFSET_Z : attacking ? ATTACK_OFFSET_Z : (guarding || mining) ? GUARD_OFFSET_Z : OFFSET_Z;
+        boolean grabbing = action == GestaltAction.LEDGE_GRAB;
+        boolean wallSliding = action == GestaltAction.WALL_SLIDE;
+        boolean guarding = action == GestaltAction.GUARD || action == GestaltAction.CHARGED_STRIKE_WINDUP;
+        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3;
+        boolean mining = !grabbing && !wallSliding && !guarding && !attacking && isLocalPlayerMining(player);
+
+        float xOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_X : attacking ? ATTACK_OFFSET_X : (guarding || mining) ? GUARD_OFFSET_X : OFFSET_X;
+        float yOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_Y : OFFSET_Y;
+        float zOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_Z : attacking ? ATTACK_OFFSET_Z : (guarding || mining) ? GUARD_OFFSET_Z : OFFSET_Z;
+
+        float[] shake = getShakeOffset(player.getUUID(), player.level().getGameTime(), partialTick);
+        xOffset += shake[0];
+        yOffset += shake[1];
+        zOffset += shake[2];
 
         gestaltModel.setupAnim(player, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
 
@@ -147,14 +209,24 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         if (grabbing && state.getLedgeFace() != null) {
             float ledgeYaw = directionToYaw(state.getLedgeFace());
             yawCorrection = ledgeYaw - bodyYaw;
+        } else if (wallSliding && state.getWallSlideFace() != null) {
+            float slideYaw = directionToYaw(state.getWallSlideFace());
+            yawCorrection = slideYaw - bodyYaw;
         } else if (attacking) {
             yawCorrection = netHeadYaw + 20F;
         } else if (guarding || mining) {
             yawCorrection = netHeadYaw;
         } else if (state.isIdle()) {
-            float[] yaws = smoothedYawMap.get(player.getUUID());
-            float smoothedYaw = (yaws != null) ? Mth.lerp(partialTick, yaws[0], yaws[1]) : bodyYaw;
-            yawCorrection = smoothedYaw - bodyYaw;
+            // Skip smoothing correction in GUI contexts (inventory screen etc.) where vanilla
+            // temporarily overrides yBodyRot to face the camera, making world-space smoothedYaw
+            // produce a wrong offset. In those cases yawCorrection=0 is correct (gestalt stays
+            // at the fixed behind-player offset as displayed on screen).
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.screen == null || mc.player != player) {
+                float[] yaws = smoothedYawMap.get(player.getUUID());
+                float smoothedYaw = (yaws != null) ? Mth.lerp(partialTick, yaws[0], yaws[1]) : bodyYaw;
+                yawCorrection = smoothedYaw - bodyYaw;
+            }
         }
 
         // Pitch correction: tilt gestalt up/down to follow head pitch when guarding/attacking.
@@ -163,7 +235,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
         // Fully summoned — render normally without VFX overhead
         if (progress >= 0.999f) {
-            VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(TEXTURE));
+            VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(textureFor(state)));
             poseStack.pushPose();
             if (yawCorrection != 0) {
                 poseStack.mulPose(Axis.YP.rotationDegrees(yawCorrection));
@@ -172,7 +244,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset, yOffset, zOffset);
-            renderGestaltModel(poseStack, vc, packedLight, 1.0f);
+            renderGestaltModel(poseStack, vc, packedLight, 0.9f);
             poseStack.popPose();
             return;
         }
@@ -214,7 +286,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         int gestaltId = player.getId();
         float gameTime = player.level().getGameTime();
 
-        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.entityTranslucent(TEXTURE));
+        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.entityTranslucent(textureFor(state)));
 
         // --- Jitter passes: each slightly offset with reduced alpha ---
         for (int i = 0; i < passes; i++) {
@@ -257,10 +329,15 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
     private static boolean isLocalPlayerMining(AbstractClientPlayer player) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player != player) return false;
-        if (!mc.options.keyAttack.isDown()) return false;
-        if (!(mc.hitResult instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return false;
-        return Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) <= 3.5;
+        if (mc.player == player) {
+            // Local player: detect via input so the layer reflects the local state with no lag.
+            if (!mc.options.keyAttack.isDown()) return false;
+            if (!(mc.hitResult instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return false;
+            PlayerGestaltState layerState = player.getData(net.ragdot.gestaltresonance.common.GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            return Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(player.getEyePosition()) <= GestaltCosts.mineRangeFor(layerState);
+        }
+        // Remote players: use server-synced state.
+        return player.getData(net.ragdot.gestaltresonance.common.GestaltAttachments.PLAYER_GESTALT_STATE.get()).isMining();
     }
 
     /**

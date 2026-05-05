@@ -19,13 +19,13 @@
     "subtitle": "subtitles.gestaltresonance.gestalt.awaken",
     "sounds": [ "gestaltresonance:gestalt/gestalt_awaken" ]
   },
-  "gestalt.guardbreak": {
-    "subtitle": "subtitles.gestaltresonance.gestalt.guardbreak",
-    "sounds": [ "gestaltresonance:gestalt/guardbreak" ]
+  "gestalt.heavy_impact": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.heavy_impact",
+    "sounds": [ "gestaltresonance:gestalt/heavy_impact" ]
   },
-  "gestalt.punch": {
-    "subtitle": "subtitles.gestaltresonance.gestalt.punch",
-    "sounds": [ "gestaltresonance:gestalt/punch" ]
+  "gestalt.fail": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.fail",
+    "sounds": [ "gestaltresonance:gestalt/fail" ]
   },
   "gestalt.levelup": {
     "subtitle": "subtitles.gestaltresonance.gestalt.levelup",

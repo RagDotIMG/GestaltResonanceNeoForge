@@ -32,13 +32,13 @@ public final class GestaltSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_AWAKEN =
             register("gestalt.awaken");
 
-    /** Plays when a guard is broken. */
-    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_GUARDBREAK =
-            register("gestalt.guardbreak");
+    /** Plays on guard break and fall break impact. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_HEAVY_IMPACT =
+            register("gestalt.heavy_impact");
 
-    /** Plays on gestalt punch/strike. */
-    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_PUNCH =
-            register("gestalt.punch");
+    /** Plays when a gestalt action fails (summoning blocked, power denied, etc.). */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_FAIL =
+            register("gestalt.fail");
 
     /** Plays when the gestalt gains a level. */
     public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_LEVELUP =

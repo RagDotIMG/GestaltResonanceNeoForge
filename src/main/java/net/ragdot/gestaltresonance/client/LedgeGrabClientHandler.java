@@ -42,7 +42,12 @@ public class LedgeGrabClientHandler {
 
         boolean spaceDown = mc.options.keyJump.isDown();
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        
+
+        // Wall slide takes priority; the wall slide handler already manages SPACE
+        if (state.isWallSliding()) {
+            wasSpaceDown = spaceDown;
+            return;
+        }
 
         // If currently ledge-grabbing, freeze all client-side movement and handle space release
         if (state.isLedgeGrabbing()) {

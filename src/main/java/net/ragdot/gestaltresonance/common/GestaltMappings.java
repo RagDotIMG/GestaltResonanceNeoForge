@@ -17,9 +17,8 @@ public final class GestaltMappings {
      */
     @Nullable
     public static ResourceLocation gestaltFromHost(EntityType<?> type) {
-        if (type == EntityType.CREEPER) {
-            return GestaltIds.AMEN_BREAK;
-        }
+        if (type == EntityType.CREEPER)    return GestaltIds.AMEN_BREAK;
+        if (type == EntityType.GLOW_SQUID) return GestaltIds.SPILLWAYS;
         return null;
     }
 

@@ -12,8 +12,10 @@ public final class GestaltStatsRegistry {
     private static final Map<ResourceLocation, GestaltStats> STATS = new HashMap<>();
 
     static {
-        // Strength 4 | Speed 3 | Durability 3 | Range 2 | Resonance 2
-        STATS.put(GestaltIds.AMEN_BREAK, new GestaltStats(4, 3, 3, 2, 2));
+        // Strength 3 | Speed 3 | Durability 3 | Range 2 | Resonance 1
+        STATS.put(GestaltIds.AMEN_BREAK, new GestaltStats(3, 3, 3, 2, 1));
+        // Strength 2 | Speed 3 | Durability 2 | Range 4 | Resonance 5
+        STATS.put(GestaltIds.SPILLWAYS,  new GestaltStats(2, 3, 2, 4, 5));
     }
 
     @Nullable

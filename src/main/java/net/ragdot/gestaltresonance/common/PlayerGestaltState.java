@@ -8,6 +8,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Holds the gestalt summoning state and ledge grab state for a player.
@@ -50,7 +54,11 @@ public class PlayerGestaltState {
             Codec.INT.fieldOf("consumedXpPoints").forGetter(s -> s.consumedXpPoints),
             Codec.INT.fieldOf("targetXpPoints").forGetter(s -> s.targetXpPoints),
             Codec.INT.optionalFieldOf("gestaltLevel", 1).forGetter(s -> s.gestaltLevel),
-            Codec.INT.optionalFieldOf("gestaltXp", 0).forGetter(s -> s.gestaltXp)
+            Codec.INT.optionalFieldOf("gestaltXp", 0).forGetter(s -> s.gestaltXp),
+            ResourceLocation.CODEC.optionalFieldOf("selectedSkin", NONE).forGetter(s -> s.selectedSkin),
+            Codec.list(ResourceLocation.CODEC).optionalFieldOf("unlockedSkins", List.of()).forGetter(s -> new ArrayList<>(s.unlockedSkins)),
+            Codec.INT.optionalFieldOf("gestaltCrashCount", 0).forGetter(s -> s.gestaltCrashCount),
+            Codec.INT.optionalFieldOf("resonanceValue", 0).forGetter(s -> s.resonanceValue)
     ).apply(inst, PlayerGestaltState::new));
 
     private boolean summoned;
@@ -68,6 +76,29 @@ public class PlayerGestaltState {
     private int gestaltLevel;
     private int gestaltXp;
 
+    // --- Skin selection (persisted) ---
+    /** {@link #NONE} means "use the default skin for the current gestalt". */
+    private ResourceLocation selectedSkin = NONE;
+    private Set<ResourceLocation> unlockedSkins = new HashSet<>();
+
+    // --- Cumulative gestalt crash counter (persisted) ---
+    /** Capped at the largest registered crash-count unlock threshold; further crashes do not increment. */
+    private int gestaltCrashCount = 0;
+
+    // --- Resonance (persisted) ---
+    /** Clamped between -maxDissonance and +maxResonance; 0 = equilibrium. */
+    private int resonanceValue = 0;
+
+    // --- Resonance tracking (transient, not serialized) ---
+    /** Last server tick at which a hostile mob was detected nearby; -1 = never detected. */
+    private long lastHostileMobNearbyTick = -1L;
+    /** Gestalt XP accumulated toward the next GAIN_XP_CHANNEL bonus during channeling. */
+    private int xpChannelResonanceAccumulator = 0;
+    /** Server tick when the most recent fall break landing occurred; -1 = none. */
+    private long fallBreakTick = -1L;
+    /** Server tick when guard was last activated; -1 = not set. Used for parry detection. */
+    private long guardActivatedTick = -1L;
+
     // --- Vessel swap cooldown (transient, not serialized) ---
     private long lastVesselSwapGameTime;
 
@@ -84,9 +115,68 @@ public class PlayerGestaltState {
     // --- Active action (transient, derived from the rest of the state) ---
     private GestaltAction currentAction = GestaltAction.IDLE;
 
+    // --- Throw origin (transient, client-side only, not serialized) ---
+    private double throwOriginX, throwOriginY, throwOriginZ;
+    private float throwOriginYaw;
+
+    // Server-side: armed when a throw fires, cleared on next on-ground tick.
+    // Drives the LivingFallEvent damage reduction.
+    private boolean throwFallProtection = false;
+
+    // --- XP channeling (transient, server-authoritative) ---
+    // Active flag synced to clients for feedback rendering.
+    private boolean channelingXp = false;
+    // Absolute server tick when the channel started (used for ramp lookup).
+    private long channelStartTick = 0L;
+    // Fractional drain accumulators — round to whole points before applying.
+    private float channelPlayerXpAccumulator = 0f;
+    private float channelGestaltXpAccumulator = 0f;
+
     // --- Guard state (transient, not serialized) ---
     private float guardDamageAccumulated = 0f;
     private long guardCooldownUntilTick = 0L;
+
+    // --- Mining (transient, synced from local client to tracking clients for remote rendering) ---
+    private boolean mining = false;
+
+    // --- Charged strike (transient, synced when entering travel) ---
+    private double chargedStrikeLaunchX, chargedStrikeLaunchY, chargedStrikeLaunchZ;
+    private int chargedStrikeTargetEntityId = -1;
+    private int chargedStrikeSpeedTier = 0;
+    /** Server snapshot of total straight-line distance from launch to target at fire time. */
+    private double chargedStrikeTargetDistance = 0.0;
+    /** Server-tracked distance traveled per tick (and synced for client lerp). */
+    private double chargedStrikeTraveled = 0.0;
+
+    // --- Ghost state (transient, not serialized) ---
+    private boolean ghostState = false;
+
+    // --- Power activation state (transient, not serialized) ---
+    /** Absolute server tick at which the shared power cooldown expires. */
+    private long powerCooldownUntilTick = 0L;
+    /** Server tick when the current power windup began; -1 = not winding up. */
+    private long powerWindupStartTick = -1L;
+
+    // --- Power 1G mark (transient, not serialized) ---
+    private int markedEntityId = -1;
+    private int markedEntityTicksRemaining = 0;
+    @Nullable private Vec3 markedEntityLastPos;
+
+    // --- Soul projection state (transient, not serialized) ---
+    private boolean soulProjecting = false;
+    private int bodyDoubleEntityId = -1;
+    /** Server-authoritative anchor (body double spawn pos). Mirrored to the owning client for range prediction. */
+    @Nullable private Vec3 soulProjectionAnchor;
+    /** Server-authoritative max range in blocks. Mirrored to owning client for range prediction. */
+    private float soulProjectionMaxRange = 0f;
+    /** Server-side cooldown countdown after projection ends. Decrements each server tick when > 0. */
+    private int soulProjectionCooldownTicks = 0;
+
+    // --- Wall slide state (transient, not serialized) ---
+    private boolean wallSliding = false;
+    @Nullable private Direction wallSlideFace;
+    private double wallSlideDistance = 0.0;
+    private boolean canAttachToWall = true;
 
     // --- Ledge grab state (transient, not serialized) ---
     private boolean ledgeGrabbing;
@@ -102,11 +192,11 @@ public class PlayerGestaltState {
     public static final int DEFAULT_TARGET_XP = 315;
 
     public PlayerGestaltState() {
-        this(false, NONE, false, false, "", "", 0, DEFAULT_TARGET_XP, 1, 0);
+        this(false, NONE, false, false, "", "", 0, DEFAULT_TARGET_XP, 1, 0, NONE, List.of(), 0, 0);
     }
 
     public PlayerGestaltState(boolean summoned, ResourceLocation gestaltId) {
-        this(summoned, gestaltId, false, false, "", "", 0, DEFAULT_TARGET_XP, 1, 0);
+        this(summoned, gestaltId, false, false, "", "", 0, DEFAULT_TARGET_XP, 1, 0, NONE, List.of(), 0, 0);
     }
 
     public PlayerGestaltState(boolean summoned, ResourceLocation gestaltId,
@@ -114,7 +204,7 @@ public class PlayerGestaltState {
                               String pendingGestaltType, String awakenedGestaltType,
                               int consumedXpPoints, int targetXpPoints) {
         this(summoned, gestaltId, dormant, awakened, pendingGestaltType, awakenedGestaltType,
-                consumedXpPoints, targetXpPoints, 1, 0);
+                consumedXpPoints, targetXpPoints, 1, 0, NONE, List.of(), 0, 0);
     }
 
     public PlayerGestaltState(boolean summoned, ResourceLocation gestaltId,
@@ -122,6 +212,19 @@ public class PlayerGestaltState {
                               String pendingGestaltType, String awakenedGestaltType,
                               int consumedXpPoints, int targetXpPoints,
                               int gestaltLevel, int gestaltXp) {
+        this(summoned, gestaltId, dormant, awakened, pendingGestaltType, awakenedGestaltType,
+                consumedXpPoints, targetXpPoints, gestaltLevel, gestaltXp, NONE, List.of(), 0, 0);
+    }
+
+    public PlayerGestaltState(boolean summoned, ResourceLocation gestaltId,
+                              boolean dormant, boolean awakened,
+                              String pendingGestaltType, String awakenedGestaltType,
+                              int consumedXpPoints, int targetXpPoints,
+                              int gestaltLevel, int gestaltXp,
+                              ResourceLocation selectedSkin,
+                              List<ResourceLocation> unlockedSkins,
+                              int gestaltCrashCount,
+                              int resonanceValue) {
         this.summoned = summoned;
         this.gestaltId = gestaltId;
         this.dormant = dormant;
@@ -132,6 +235,10 @@ public class PlayerGestaltState {
         this.targetXpPoints = targetXpPoints;
         this.gestaltLevel = Math.max(1, Math.min(MAX_GESTALT_LEVEL, gestaltLevel));
         this.gestaltXp = Math.max(0, gestaltXp);
+        this.selectedSkin = selectedSkin == null ? NONE : selectedSkin;
+        this.unlockedSkins = new HashSet<>(unlockedSkins);
+        this.gestaltCrashCount = Math.max(0, gestaltCrashCount);
+        this.resonanceValue = resonanceValue;
         this.summonProgress = summoned ? 1.0f : 0.0f;
         this.summonProgressO = this.summonProgress;
         this.ledgeGrabbing = false;
@@ -165,15 +272,72 @@ public class PlayerGestaltState {
             return;
         }
         summoned = !summoned;
-        // Cancel ledge grab and return to idle when desummoning
+        // Cancel ledge grab / wall slide and return to idle when desummoning
         if (!summoned) {
             clearLedgeGrab();
+            clearWallSlide();
         }
         // Resummon always starts from idle
         if (summoned) {
             currentAction = GestaltAction.IDLE;
         }
     }
+
+    // --- Throw origin accessors ---
+
+    public void setThrowOrigin(double x, double y, double z, float yaw) {
+        throwOriginX = x; throwOriginY = y; throwOriginZ = z; throwOriginYaw = yaw;
+    }
+    public double getThrowOriginX() { return throwOriginX; }
+    public double getThrowOriginY() { return throwOriginY; }
+    public double getThrowOriginZ() { return throwOriginZ; }
+    public float getThrowOriginYaw() { return throwOriginYaw; }
+
+    public boolean hasThrowFallProtection() { return throwFallProtection; }
+    public void setThrowFallProtection(boolean v) { throwFallProtection = v; }
+
+    // --- Mining accessors ---
+    public boolean isMining() { return mining; }
+    public void setMining(boolean v) { mining = v; }
+
+    // --- Charged strike accessors ---
+
+    public void setChargedStrikeLaunch(double x, double y, double z) {
+        chargedStrikeLaunchX = x; chargedStrikeLaunchY = y; chargedStrikeLaunchZ = z;
+    }
+    public double getChargedStrikeLaunchX() { return chargedStrikeLaunchX; }
+    public double getChargedStrikeLaunchY() { return chargedStrikeLaunchY; }
+    public double getChargedStrikeLaunchZ() { return chargedStrikeLaunchZ; }
+
+    public int getChargedStrikeTargetEntityId() { return chargedStrikeTargetEntityId; }
+    public void setChargedStrikeTargetEntityId(int id) { chargedStrikeTargetEntityId = id; }
+
+    public int getChargedStrikeSpeedTier() { return chargedStrikeSpeedTier; }
+    public void setChargedStrikeSpeedTier(int tier) { chargedStrikeSpeedTier = tier; }
+
+    public double getChargedStrikeTargetDistance() { return chargedStrikeTargetDistance; }
+    public void setChargedStrikeTargetDistance(double d) { chargedStrikeTargetDistance = d; }
+
+    public double getChargedStrikeTraveled() { return chargedStrikeTraveled; }
+    public void setChargedStrikeTraveled(double d) { chargedStrikeTraveled = d; }
+
+    public void clearChargedStrikeData() {
+        chargedStrikeLaunchX = chargedStrikeLaunchY = chargedStrikeLaunchZ = 0.0;
+        chargedStrikeTargetEntityId = -1;
+        chargedStrikeSpeedTier = 0;
+        chargedStrikeTargetDistance = 0.0;
+        chargedStrikeTraveled = 0.0;
+    }
+
+    // --- Channeling accessors ---
+    public boolean isChannelingXp() { return channelingXp; }
+    public void setChannelingXp(boolean v) { channelingXp = v; }
+    public long getChannelStartTick() { return channelStartTick; }
+    public void setChannelStartTick(long t) { channelStartTick = t; }
+    public float getChannelPlayerXpAccumulator() { return channelPlayerXpAccumulator; }
+    public void setChannelPlayerXpAccumulator(float v) { channelPlayerXpAccumulator = v; }
+    public float getChannelGestaltXpAccumulator() { return channelGestaltXpAccumulator; }
+    public void setChannelGestaltXpAccumulator(float v) { channelGestaltXpAccumulator = v; }
 
     // --- Action accessors ---
 
@@ -238,6 +402,67 @@ public class PlayerGestaltState {
     public int getTicksGrabbing() { return ticksGrabbing; }
     public void setTicksGrabbing(int ticks) { this.ticksGrabbing = ticks; }
 
+    // --- Ghost state accessors ---
+    public boolean isGhostState() { return ghostState; }
+    public void setGhostState(boolean v) { ghostState = v; }
+
+    // --- Power state accessors ---
+    public long getPowerCooldownUntilTick() { return powerCooldownUntilTick; }
+    public void setPowerCooldownUntilTick(long t) { powerCooldownUntilTick = t; }
+    public boolean hasPowerCooldown(long currentTick) { return currentTick < powerCooldownUntilTick; }
+
+    public long getPowerWindupStartTick() { return powerWindupStartTick; }
+    public void setPowerWindupStartTick(long t) { powerWindupStartTick = t; }
+
+    // --- Power 1G mark accessors ---
+    public int getMarkedEntityId() { return markedEntityId; }
+    public void setMarkedEntityId(int id) { markedEntityId = id; }
+    public int getMarkedEntityTicksRemaining() { return markedEntityTicksRemaining; }
+    public void setMarkedEntityTicksRemaining(int t) { markedEntityTicksRemaining = t; }
+    @Nullable public Vec3 getMarkedEntityLastPos() { return markedEntityLastPos; }
+    public void setMarkedEntityLastPos(@Nullable Vec3 v) { markedEntityLastPos = v; }
+    public void clearMark() {
+        markedEntityId = -1;
+        markedEntityTicksRemaining = 0;
+        markedEntityLastPos = null;
+    }
+
+    // --- Soul projection accessors ---
+    public boolean isSoulProjecting() { return soulProjecting; }
+    public void setSoulProjecting(boolean v) { soulProjecting = v; }
+    public int getBodyDoubleEntityId() { return bodyDoubleEntityId; }
+    public void setBodyDoubleEntityId(int id) { bodyDoubleEntityId = id; }
+    @Nullable public Vec3 getSoulProjectionAnchor() { return soulProjectionAnchor; }
+    public void setSoulProjectionAnchor(@Nullable Vec3 v) { soulProjectionAnchor = v; }
+    public float getSoulProjectionMaxRange() { return soulProjectionMaxRange; }
+    public void setSoulProjectionMaxRange(float v) { soulProjectionMaxRange = v; }
+    public int getSoulProjectionCooldownTicks() { return soulProjectionCooldownTicks; }
+    public void setSoulProjectionCooldownTicks(int t) { soulProjectionCooldownTicks = Math.max(0, t); }
+
+    // --- Wall slide accessors ---
+
+    public boolean isWallSliding() { return wallSliding; }
+
+    public void startWallSlide(Direction face) {
+        this.wallSliding = true;
+        this.currentAction = GestaltAction.WALL_SLIDE;
+        this.wallSlideFace = face;
+        this.wallSlideDistance = 0.0;
+    }
+
+    public void clearWallSlide() {
+        this.wallSliding = false;
+        if (this.currentAction == GestaltAction.WALL_SLIDE) this.currentAction = GestaltAction.IDLE;
+        this.wallSlideFace = null;
+        this.wallSlideDistance = 0.0;
+    }
+
+    @Nullable public Direction getWallSlideFace() { return wallSlideFace; }
+    public double getWallSlideDistance() { return wallSlideDistance; }
+    public void setWallSlideDistance(double d) { wallSlideDistance = d; }
+    public boolean canAttachToWall() { return canAttachToWall; }
+    public void setCanAttachToWall(boolean v) { canAttachToWall = v; }
+
     public int getMantleTicks() { return mantleTicks; }
     public void setMantleTicks(int ticks) { this.mantleTicks = ticks; }
     @Nullable public Vec3 getMantleTarget() { return mantleTarget; }
@@ -300,6 +525,109 @@ public class PlayerGestaltState {
     public int getGestaltXp() { return gestaltXp; }
     public void setGestaltXp(int xp) { this.gestaltXp = Math.max(0, xp); }
 
+    /** Total XP across all accumulated levels plus current within-level progress. */
+    public int getTotalGestaltXp() {
+        int total = gestaltXp;
+        for (int lvl = 1; lvl < gestaltLevel; lvl++) {
+            total += XP_PER_LEVEL[lvl];
+        }
+        return total;
+    }
+
+    /**
+     * Deduct {@code amount} from the total gestalt XP pool, de-leveling if the current
+     * within-level progress is insufficient. Returns {@code false} without modifying state
+     * if the total pool is smaller than the requested amount.
+     */
+    public boolean spendGestaltXp(int amount) {
+        if (getTotalGestaltXp() < amount) return false;
+        int remaining = amount;
+        while (remaining > 0) {
+            if (gestaltXp >= remaining) {
+                gestaltXp -= remaining;
+                remaining = 0;
+            } else {
+                remaining -= gestaltXp;
+                gestaltLevel = Math.max(1, gestaltLevel - 1);
+                gestaltXp = XP_PER_LEVEL[gestaltLevel]; // full previous level's pool
+            }
+        }
+        return true;
+    }
+
+    // --- Skin accessors ---
+    /** Returns {@link #NONE} if no explicit skin has been selected (renderers should fall back to the gestalt's default). */
+    public ResourceLocation getSelectedSkin() { return selectedSkin; }
+    public void setSelectedSkin(ResourceLocation skin) { this.selectedSkin = skin == null ? NONE : skin; }
+    public Set<ResourceLocation> getUnlockedSkins() { return unlockedSkins; }
+    /** Adds the skin to the unlocked set. Returns {@code true} if it was newly added. */
+    public boolean unlockSkin(ResourceLocation skin) { return unlockedSkins.add(skin); }
+    public boolean isSkinUnlocked(ResourceLocation skin) { return unlockedSkins.contains(skin); }
+    public void setUnlockedSkins(Set<ResourceLocation> skins) {
+        this.unlockedSkins = (skins == null) ? new HashSet<>() : new HashSet<>(skins);
+    }
+
+    // --- Crash counter ---
+    public int getGestaltCrashCount() { return gestaltCrashCount; }
+    public void setGestaltCrashCount(int count) { this.gestaltCrashCount = Math.max(0, count); }
+    public void incrementGestaltCrashCount() { this.gestaltCrashCount++; }
+
+    // --- Resonance ---
+
+    public int getResonanceValue() { return resonanceValue; }
+    public void setResonanceValue(int value) { resonanceValue = value; }
+
+    /** Decay the resonance value toward 0 by {@code amount} (always moves toward equilibrium). */
+    public void decayResonance(int amount) {
+        if (resonanceValue > 0) {
+            resonanceValue = Math.max(0, resonanceValue - amount);
+        } else if (resonanceValue < 0) {
+            resonanceValue = Math.min(0, resonanceValue + amount);
+        }
+    }
+
+    /**
+     * Adds resonance with tier multiplier applied. Clamped to the positive cap.
+     * @return the effective amount added after multiplier
+     */
+    public int addResonance(int baseAmount, GestaltStats stats) {
+        if (baseAmount <= 0 || stats == null) return 0;
+        int maxRes = GestaltCosts.maxResonance(stats.resonance());
+        float mult = GestaltCosts.getTierMultiplier(resonanceValue, maxRes);
+        int effective = Math.round(baseAmount * mult);
+        if (effective <= 0) return 0;
+        resonanceValue = Math.min(maxRes, resonanceValue + effective);
+        return effective;
+    }
+
+    /**
+     * Subtracts dissonance (flat, no multiplier). Clamped to the negative cap.
+     * @return true if the dissonance cap was reached (caller should trigger crash)
+     */
+    public boolean addDissonance(int amount, GestaltStats stats) {
+        if (amount <= 0 || stats == null) return false;
+        int maxDis = GestaltCosts.maxDissonance(stats.resonance());
+        resonanceValue = Math.max(-maxDis, resonanceValue - amount);
+        return resonanceValue <= -maxDis;
+    }
+
+    /** True when the dissonance side exceeds 80% of the cap. */
+    public boolean isDesperateStruggle(GestaltStats stats) {
+        if (stats == null || resonanceValue >= 0) return false;
+        int maxDis = GestaltCosts.maxDissonance(stats.resonance());
+        return -resonanceValue >= (int)(maxDis * GestaltCosts.DESPERATE_STRUGGLE_THRESHOLD);
+    }
+
+    // --- Resonance transient tracking ---
+    public long getLastHostileMobNearbyTick() { return lastHostileMobNearbyTick; }
+    public void setLastHostileMobNearbyTick(long tick) { lastHostileMobNearbyTick = tick; }
+    public long getFallBreakTick() { return fallBreakTick; }
+    public void setFallBreakTick(long tick) { fallBreakTick = tick; }
+    public long getGuardActivatedTick() { return guardActivatedTick; }
+    public void setGuardActivatedTick(long tick) { guardActivatedTick = tick; }
+    public int getXpChannelResonanceAccumulator() { return xpChannelResonanceAccumulator; }
+    public void setXpChannelResonanceAccumulator(int v) { xpChannelResonanceAccumulator = v; }
+
     /** XP needed to advance from the given level to the next. Returns MAX_VALUE at max level. */
     public static int getXpForNextLevel(int level) {
         if (level <= 0 || level > MAX_GESTALT_LEVEL) return Integer.MAX_VALUE;
@@ -335,8 +663,24 @@ public class PlayerGestaltState {
     public PlayerGestaltState copy() {
         PlayerGestaltState c = new PlayerGestaltState(summoned, gestaltId,
                 dormant, awakened, pendingGestaltType, awakenedGestaltType,
-                consumedXpPoints, targetXpPoints, gestaltLevel, gestaltXp);
+                consumedXpPoints, targetXpPoints, gestaltLevel, gestaltXp,
+                selectedSkin, new ArrayList<>(unlockedSkins), gestaltCrashCount, resonanceValue);
         c.currentAction = this.currentAction;
+        c.ghostState = this.ghostState;
+        c.powerCooldownUntilTick = this.powerCooldownUntilTick;
+        c.powerWindupStartTick = this.powerWindupStartTick;
+        c.markedEntityId = this.markedEntityId;
+        c.markedEntityTicksRemaining = this.markedEntityTicksRemaining;
+        c.markedEntityLastPos = this.markedEntityLastPos;
+        c.soulProjecting = this.soulProjecting;
+        c.bodyDoubleEntityId = this.bodyDoubleEntityId;
+        c.soulProjectionAnchor = this.soulProjectionAnchor;
+        c.soulProjectionMaxRange = this.soulProjectionMaxRange;
+        c.soulProjectionCooldownTicks = this.soulProjectionCooldownTicks;
+        c.wallSliding = this.wallSliding;
+        c.wallSlideFace = this.wallSlideFace;
+        c.wallSlideDistance = this.wallSlideDistance;
+        c.canAttachToWall = this.canAttachToWall;
         c.ledgeGrabbing = this.ledgeGrabbing;
         c.ledgePos = this.ledgePos;
         c.ledgeFace = this.ledgeFace;

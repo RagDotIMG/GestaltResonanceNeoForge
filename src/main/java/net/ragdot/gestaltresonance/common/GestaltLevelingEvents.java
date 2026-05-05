@@ -38,6 +38,7 @@ public class GestaltLevelingEvents {
 
         if (levelsGained > 0) {
             serverPlayer.playNotifySound(GestaltSounds.GESTALT_LEVELUP.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+            net.ragdot.gestaltresonance.common.skin.GestaltSkinUnlockEvents.checkLevelUnlock(serverPlayer);
         }
 
         GestaltNetworking.syncGestaltXpToPlayer(serverPlayer);

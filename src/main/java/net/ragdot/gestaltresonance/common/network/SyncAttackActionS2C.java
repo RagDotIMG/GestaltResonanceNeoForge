@@ -10,7 +10,8 @@ import net.ragdot.gestaltresonance.common.GestaltAction;
 
 /**
  * Server-to-client: sync the current attack-chain action for a player.
- * actionId encoding: 0 = IDLE (chain ended), 1 = HIT_1, 2 = HIT_2, 3 = HIT_3.
+ * actionId encoding: 0 = IDLE, 1 = HIT_1, 2 = HIT_2, 3 = HIT_3, 4 = THROW,
+ * 5 = CHARGED_STRIKE_WINDUP, 6 = CHARGED_STRIKE_TRAVEL, 7 = POWER_1G_WINDUP.
  */
 public record SyncAttackActionS2C(int entityId, byte actionId) implements CustomPacketPayload {
 
@@ -34,6 +35,10 @@ public record SyncAttackActionS2C(int entityId, byte actionId) implements Custom
             case 1 -> GestaltAction.HIT_1;
             case 2 -> GestaltAction.HIT_2;
             case 3 -> GestaltAction.HIT_3;
+            case 4 -> GestaltAction.THROW;
+            case 5 -> GestaltAction.CHARGED_STRIKE_WINDUP;
+            case 6 -> GestaltAction.CHARGED_STRIKE_TRAVEL;
+            case 7 -> GestaltAction.POWER_1G_WINDUP;
             default -> GestaltAction.IDLE;
         };
     }
@@ -43,6 +48,10 @@ public record SyncAttackActionS2C(int entityId, byte actionId) implements Custom
             case HIT_1 -> 1;
             case HIT_2 -> 2;
             case HIT_3 -> 3;
+            case THROW -> 4;
+            case CHARGED_STRIKE_WINDUP -> 5;
+            case CHARGED_STRIKE_TRAVEL -> 6;
+            case POWER_1G_WINDUP -> 7;
             default -> 0;
         };
     }

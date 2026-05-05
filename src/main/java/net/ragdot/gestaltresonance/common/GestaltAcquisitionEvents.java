@@ -19,7 +19,9 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.ragdot.gestaltresonance.GestaltResonance;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
+import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
+import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
 
@@ -55,6 +57,37 @@ public class GestaltAcquisitionEvents {
     private static final int DRAIN_INTERVAL = 20;
     /** XP points drained per pulse. */
     private static final int DRAIN_AMOUNT = 1;
+
+    /**
+     * Force-dismiss the gestalt with the full crash flow: cancel actions, set re-summon
+     * cooldown, deactivate passive, play dissolve sound, broadcast crash + state sync,
+     * and notify the skin-unlock listener so the crash count is bumped.
+     *
+     * Used by hunger crash, fall break crash, and any future crash-trigger.
+     */
+    public static void crashGestalt(ServerPlayer player) {
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned()) return;
+
+        boolean wasGuarding = state.isGuarding();
+        long currentTick = player.getServer().getTickCount();
+
+        GestaltThrowEvents.cancelThrow(player);
+        state.clearGuard();
+        state.clearLedgeGrab();
+        state.setSummoned(false);
+        state.setAction(GestaltAction.IDLE);
+        state.setCrashUntilTick(currentTick + GestaltCosts.CRASH_COOLDOWN_TICKS);
+        GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
+        if (passive != null) passive.onDeactivate(player);
+        player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        player.playNotifySound(GestaltSounds.GESTALT_DISSOLVE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+        GestaltNetworking.syncCrashToTracking(player);
+        GestaltNetworking.syncToTracking(player);
+        if (wasGuarding) GestaltNetworking.syncGuardToTracking(player, false);
+
+        net.ragdot.gestaltresonance.common.skin.GestaltSkinUnlockEvents.onGestaltCrash(player);
+    }
 
 
     // ── Crying Obsidian brushing ──────────────────────────────
@@ -188,24 +221,13 @@ public class GestaltAcquisitionEvents {
         if (drainTickCounter < DRAIN_INTERVAL) return;
         drainTickCounter = 0;
 
-        long currentTick = event.getServer().getTickCount();
         for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
             // Hunger crash: force-unsummon when food level is at or below threshold
             if (state.isSummoned() && player.getFoodData().getFoodLevel() <= GestaltCosts.CRASH_HUNGER_THRESHOLD) {
-                boolean wasGuarding = state.isGuarding();
-                state.clearGuard();
-                state.clearLedgeGrab();
-                state.setSummoned(false);
-                state.setCrashUntilTick(currentTick + GestaltCosts.CRASH_COOLDOWN_TICKS);
-                GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
-                if (passive != null) passive.onDeactivate(player);
-                player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
-                player.playNotifySound(GestaltSounds.GESTALT_DISSOLVE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
-                GestaltNetworking.syncCrashToTracking(player);
-                GestaltNetworking.syncToTracking(player);
-                if (wasGuarding) GestaltNetworking.syncGuardToTracking(player, false);
+                crashGestalt(player);
+                state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             }
 
             if (!state.isDormant()) continue;
@@ -236,7 +258,8 @@ public class GestaltAcquisitionEvents {
                 GestaltResonance.LOGGER.debug("[GestaltAcquisition] AWAKEN: player={} awakenedGestaltType={}",
                         player.getName().getString(), gType);
                 player.displayClientMessage(
-                        Component.literal("Your gestalt has awakened! Type: " + state.getAwakenedGestaltType()),
+                        Component.literal("Your gestalt has awakened! ").append(
+                                Component.translatable("gestalt." + state.getAwakenedGestaltType().replace(":", "."))),
                         false
                 );
             } else {

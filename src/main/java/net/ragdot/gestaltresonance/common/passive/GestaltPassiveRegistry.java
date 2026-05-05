@@ -16,6 +16,7 @@ public final class GestaltPassiveRegistry {
 
     static {
         PASSIVES.put(GestaltIds.AMEN_BREAK, new AmenBreakPassive());
+        PASSIVES.put(GestaltIds.SPILLWAYS,  new SpillwaysPassive());
     }
 
     @Nullable

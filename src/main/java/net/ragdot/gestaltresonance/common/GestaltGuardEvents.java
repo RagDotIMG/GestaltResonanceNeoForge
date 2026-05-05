@@ -13,6 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
+import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
 
 /**
  * Server-side guard event hooks.
@@ -47,6 +48,8 @@ public class GestaltGuardEvents {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned() || !state.isGuarding()) return;
+        // Guard only blocks entity attacks and projectiles — never fall, fire, lava, drowning, etc.
+        if (event.getSource().getEntity() == null) return;
 
         // Guard break: hunger too low to sustain the guard
         if (player.getFoodData().getFoodLevel() <= GestaltCosts.CRASH_HUNGER_THRESHOLD) {
@@ -71,6 +74,19 @@ public class GestaltGuardEvents {
         state.addGuardDamageAccumulated(absorbed);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         player.causeFoodExhaustion(GestaltCosts.GUARD_ACTIVATION);
+
+        // Parry: guard activated 3–5 ticks before this hit → resonance instead of dissonance
+        long now = player.getServer().getTickCount();
+        long ticksSinceGuard = now - state.getGuardActivatedTick();
+        boolean isParry = state.getGuardActivatedTick() >= 0
+                && ticksSinceGuard >= GestaltCosts.GAIN_PARRY_WINDOW_MIN
+                && ticksSinceGuard <= GestaltCosts.GAIN_PARRY_WINDOW_MAX;
+
+        if (isParry) {
+            GestaltResonanceEvents.applyResonance(player, GestaltCosts.GAIN_PARRY);
+        } else {
+            GestaltResonanceEvents.applyResonance(player, -GestaltCosts.LOSS_GUARD_ABSORB);
+        }
     }
 
     private static void triggerGuardBreak(ServerPlayer player, PlayerGestaltState state, DamageSource source) {
@@ -80,7 +96,8 @@ public class GestaltGuardEvents {
                 player.getServer().getTickCount() + GestaltCosts.GUARD_BREAK_COOLDOWN_TICKS);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
-        player.playNotifySound(GestaltSounds.GESTALT_GUARDBREAK.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+        player.playNotifySound(GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+        GestaltResonanceEvents.applyResonance(player, -15);
 
         // Knock player back away from the hit source
         Entity sourceEntity = source.getEntity();

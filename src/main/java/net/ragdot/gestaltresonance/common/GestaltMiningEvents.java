@@ -19,8 +19,6 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 
 public class GestaltMiningEvents {
 
-    // Eye-to-block-center threshold: a block face 3 blocks away has its center at ~3.5
-    private static final double MINE_RANGE_THRESHOLD = 3.5;
 
     /**
      * Fires on both logical sides (client for animation, server for actual timing).
@@ -90,12 +88,16 @@ public class GestaltMiningEvents {
     }
 
     private static boolean isLookingAtBlockInRange(Player player) {
-        HitResult hit = player.pick(MINE_RANGE_THRESHOLD, 0f, false);
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        double range = GestaltCosts.mineRangeFor(state);
+        HitResult hit = player.pick(range, 0f, false);
         return hit instanceof BlockHitResult bhr && bhr.getType() != HitResult.Type.MISS;
     }
 
     private static boolean isWithinRange(Player player, BlockPos pos) {
-        return Vec3.atCenterOf(pos).distanceTo(player.getEyePosition()) <= MINE_RANGE_THRESHOLD;
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        double range = GestaltCosts.mineRangeFor(state);
+        return Vec3.atCenterOf(pos).distanceTo(player.getEyePosition()) <= range;
     }
 
     /** Strength 1–2 → tier 0 (wood), 3–4 → tier 1 (stone), 5 → tier 2 (iron). */

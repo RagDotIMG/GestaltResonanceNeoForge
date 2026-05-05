@@ -48,9 +48,9 @@ public class AmenBreakModel<T extends AmenBreak> extends EntityModel<T> {
 
 		PartDefinition Torso = BodyT.addOrReplaceChild("Torso", CubeListBuilder.create(), PartPose.offsetAndRotation(-0.0133F, -3.3445F, 0.3314F, 0.0873F, 0.0F, 0.0F));
 
-		PartDefinition BodyTop_r1 = Torso.addOrReplaceChild("BodyTop_r1", CubeListBuilder.create().texOffs(17, 36).addBox(-3.8014F, -0.8937F, -3.2778F, 7.0F, 3.0F, 7.0F, new CubeDeformation(0.08F)), PartPose.offsetAndRotation(0.0147F, -8.3619F, 2.5464F, -0.6981F, 0.637F, -0.4712F));
+		PartDefinition Collar_r1 = Torso.addOrReplaceChild("Collar_r1", CubeListBuilder.create().texOffs(17, 36).addBox(-3.8014F, -0.8937F, -3.2778F, 7.0F, 3.0F, 7.0F, new CubeDeformation(0.08F)), PartPose.offsetAndRotation(0.0147F, -8.3619F, 2.5464F, -0.6981F, 0.637F, -0.4712F));
 
-		PartDefinition BodyTop_r2 = Torso.addOrReplaceChild("BodyTop_r2", CubeListBuilder.create().texOffs(21, 24).addBox(-3.0F, -8.0F, -1.0F, 6.0F, 8.0F, 4.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(0.0133F, -0.2555F, -0.9314F, -0.2618F, 0.0F, 0.0F));
+		PartDefinition BodyTop_r1 = Torso.addOrReplaceChild("BodyTop_r1", CubeListBuilder.create().texOffs(21, 24).addBox(-3.0F, -8.0F, -1.0F, 6.0F, 8.0F, 4.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(0.0133F, -0.2555F, -0.9314F, -0.2618F, 0.0F, 0.0F));
 
 		PartDefinition Head = Torso.addOrReplaceChild("Head", CubeListBuilder.create(), PartPose.offset(-0.1581F, -9.4099F, 3.3165F));
 
@@ -72,7 +72,7 @@ public class AmenBreakModel<T extends AmenBreak> extends EntityModel<T> {
 
 		PartDefinition EYEL_r1 = Head.addOrReplaceChild("EYEL_r1", CubeListBuilder.create().texOffs(27, 3).addBox(-1.0F, -1.5F, -1.5F, 2.0F, 3.0F, 3.0F, new CubeDeformation(-0.2F)), PartPose.offsetAndRotation(-3.2516F, -2.4553F, 3.1793F, -0.4863F, 0.7208F, -0.3483F));
 
-		PartDefinition EYER_r1 = Head.addOrReplaceChild("EYER_r1", CubeListBuilder.create().texOffs(27, 3).mirror().addBox(-1.0F, -1.5F, -1.9F, 2.0F, 3.0F, 3.0F, new CubeDeformation(-0.2F)).mirror(false), PartPose.offsetAndRotation(3.2589F, -2.3536F, 3.5403F, -0.5126F, -0.7234F, 0.3422F));
+		PartDefinition EYER_r1 = Head.addOrReplaceChild("EYER_r1", CubeListBuilder.create().texOffs(27, 0).mirror().addBox(-1.0F, -1.5F, -1.9F, 2.0F, 3.0F, 3.0F, new CubeDeformation(-0.2F)).mirror(false), PartPose.offsetAndRotation(3.2589F, -2.3536F, 3.5403F, -0.5126F, -0.7234F, 0.3422F));
 
 		PartDefinition eyeback2_r1 = Head.addOrReplaceChild("eyeback2_r1", CubeListBuilder.create().texOffs(0, 16).addBox(-4.0F, -1.9F, 0.6F, 6.0F, 6.0F, 0.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(3.8874F, -4.0842F, 2.5437F, -0.4809F, 0.7227F, -0.336F));
 
