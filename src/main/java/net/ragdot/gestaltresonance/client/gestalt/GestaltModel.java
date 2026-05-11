@@ -64,6 +64,9 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
     /** Optional — return null if this gestalt doesn't support a swim pose. */
     @Nullable protected AnimationDefinition swimAnimation() { return null; }
 
+    /** Optional — return null if this gestalt doesn't support the 1G power animation. */
+    @Nullable protected AnimationDefinition power1GAnimation() { return null; }
+
     // Static so chain transitions from the network handler can reset animation state
     // for any GestaltModel instance (one per gestalt subclass) sharing the same player.
     private static final Map<UUID, AnimData> perPlayer = new HashMap<>();
@@ -158,6 +161,21 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         if (!isHitAction && data.prevHitAction != GestaltAction.IDLE) {
             data.hitState.stop();
             data.prevHitAction = GestaltAction.IDLE;
+        }
+
+        // 1G power windup
+        AnimationDefinition power1GAnim = power1GAnimation();
+        boolean power1GActive = state.getAction() == GestaltAction.POWER_1G_WINDUP;
+        if (power1GActive && power1GAnim != null) {
+            if (!data.power1GState.isStarted()) {
+                data.power1GState.start((int) ageInTicks);
+            }
+            data.power1GState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.power1GState, power1GAnim, ageInTicks);
+            return;
+        }
+        if (!power1GActive && data.power1GState.isStarted()) {
+            data.power1GState.stop();
         }
 
         // Charged-strike windup pose, also held during the travel phase so the gestalt
@@ -278,6 +296,7 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         final AnimationState hitState    = new AnimationState();
         final AnimationState windupState = new AnimationState();
         final AnimationState swimState   = new AnimationState();
+        final AnimationState power1GState = new AnimationState();
         float introStartedAt   = -1.0F;
         boolean wasSummoned       = false;
         boolean wasGuarding       = false;

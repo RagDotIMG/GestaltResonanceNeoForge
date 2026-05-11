@@ -129,6 +129,26 @@ public final class GestaltCosts {
     /** Cooldown applied at activation. */
     public static final int POWER_1S_COOLDOWN = 55;
 
+    // ── Pop Pod Power 1B (botanical projectile) ──────────────────────────────
+
+    /** Gestalt XP cost paid at activation. */
+    public static final int POWER_1B_XP_COST = 1;
+
+    /** Player exhaustion paid at activation. */
+    public static final float POWER_1B_EXHAUSTION = 1.0f;
+
+    /** Cooldown applied at activation. */
+    public static final int POWER_1B_COOLDOWN_TICKS = 40;
+
+    /** Base explosion radius for pop blocks — scaled by gestalt level. */
+    public static final float POWER_1B_EXPLOSION_BASE_RADIUS = 2.0f;
+
+    /** Base explosion damage for pop blocks — scaled by gestalt level. */
+    public static final float POWER_1B_EXPLOSION_BASE_DAMAGE = 3.0f;
+
+    /** Distance (blocks) within which a PopSprout triggers on a nearby mob. */
+    public static final double POP_SPROUT_TRIGGER_DISTANCE = 2.5;
+
     // ── Soul projection ──────────────────────────────────────────────────────
 
     /** Cooldown after a CLEAN exit (right-click own body double). */

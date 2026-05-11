@@ -74,6 +74,9 @@ public class AmenBreakModel extends GestaltModel {
     @Override
     protected AnimationDefinition swimAnimation() { return AmenBreakAnimations.SWIM; }
 
+    @Override
+    protected AnimationDefinition power1GAnimation() { return AmenBreakAnimations.POWER_1G; }
+
     public static LayerDefinition createBodyLayer() {
         MeshDefinition meshdefinition = new MeshDefinition();
         PartDefinition partdefinition = meshdefinition.getRoot();

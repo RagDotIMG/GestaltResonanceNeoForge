@@ -192,7 +192,8 @@ public class GestaltFirstPersonRenderer {
         boolean wallSliding = action == GestaltAction.WALL_SLIDE;
         boolean guarding = action == GestaltAction.GUARD;
         boolean winding = action == GestaltAction.CHARGED_STRIKE_WINDUP;
-        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3;
+        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3
+                || action == GestaltAction.POWER_1G_WINDUP;
         boolean mining = !ledgeGrabbing && !wallSliding && !guarding && !winding && !attacking
                 && mc.options.keyAttack.isDown()
                 && mc.hitResult instanceof BlockHitResult bhr

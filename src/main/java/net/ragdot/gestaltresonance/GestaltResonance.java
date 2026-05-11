@@ -28,8 +28,11 @@ import net.ragdot.gestaltresonance.common.GestaltEntities;
 import net.ragdot.gestaltresonance.common.GestaltSoulProjectionEvents;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
+import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
+import net.ragdot.gestaltresonance.common.GestaltBlocks;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1S;
+import net.ragdot.gestaltresonance.common.power.pop_pod.PopPodPower1B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
 import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -100,6 +103,8 @@ public class GestaltResonance {
         CREATIVE_MODE_TABS.register(modEventBus);
         GestaltEntities.ENTITY_TYPES.register(modEventBus);
         modEventBus.addListener(GestaltEntities::onAttributeCreate);
+        GestaltBlocks.BLOCKS.register(modEventBus);
+        GestaltBlockEntities.BLOCK_ENTITY_TYPES.register(modEventBus);
         GestaltAttachments.ATTACHMENT_TYPES.register(modEventBus);
         GestaltDataComponents.DATA_COMPONENTS.register(modEventBus);
         GestaltMobEffects.MOB_EFFECTS.register(modEventBus);
@@ -124,6 +129,7 @@ public class GestaltResonance {
         // GestaltPowerRegistry. Per-power event listeners (e.g. abort handlers) also subscribe here.
         AmenBreakPower1G.register();
         AmenBreakPower1S.register();
+        PopPodPower1B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
 
         // Config

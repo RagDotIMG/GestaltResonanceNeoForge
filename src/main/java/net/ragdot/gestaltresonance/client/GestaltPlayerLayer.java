@@ -184,7 +184,8 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         boolean grabbing = action == GestaltAction.LEDGE_GRAB;
         boolean wallSliding = action == GestaltAction.WALL_SLIDE;
         boolean guarding = action == GestaltAction.GUARD || action == GestaltAction.CHARGED_STRIKE_WINDUP;
-        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3;
+        boolean attacking = action == GestaltAction.HIT_1 || action == GestaltAction.HIT_2 || action == GestaltAction.HIT_3
+                || action == GestaltAction.POWER_1G_WINDUP;
         boolean mining = !grabbing && !wallSliding && !guarding && !attacking && isLocalPlayerMining(player);
 
         float xOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_X : attacking ? ATTACK_OFFSET_X : (guarding || mining) ? GUARD_OFFSET_X : OFFSET_X;

@@ -25,6 +25,7 @@ import net.ragdot.gestaltresonance.common.GestaltEntities;
 import net.ragdot.gestaltresonance.client.GestaltResonanceHud;
 import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltXpOverlay;
+import net.ragdot.gestaltresonance.client.entity.PopPodRenderer;
 import net.ragdot.gestaltresonance.client.entity.PrimedBlockRenderer;
 import net.ragdot.gestaltresonance.client.gestalt.AmenBreakModel;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
@@ -139,6 +140,7 @@ public class GestaltResonanceClient {
     private static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(GestaltEntities.BODY_DOUBLE.get(), BodyDoubleRenderer::new);
         event.registerEntityRenderer(GestaltEntities.PRIMED_BLOCK.get(), PrimedBlockRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.POP_POD.get(), PopPodRenderer::new);
     }
 
     private static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {

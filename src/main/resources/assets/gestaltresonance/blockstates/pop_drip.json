@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "end=false": { "model": "gestaltresonance:block/pop_drip" },
+    "end=true":  { "model": "gestaltresonance:block/pop_drip_end" }
+  }
+}

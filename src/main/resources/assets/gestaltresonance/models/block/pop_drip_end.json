@@ -1,0 +1,8 @@
+{
+  "render_type": "minecraft:cutout",
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "particle": "gestaltresonance:block/popvine_end_texture",
+    "cross":    "gestaltresonance:block/popvine_end_texture"
+  }
+}

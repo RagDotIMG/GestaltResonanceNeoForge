@@ -41,7 +41,16 @@
       "Bash(xargs -I{} sh -c 'unzip -l \"{}\" 2>/dev/null | grep -q \"LivingEntityRenderer.java\" && echo \"FOUND: {}\"')",
       "Bash(unzip -p /home/rag/.gradle/caches/neoformruntime/intermediate_results/decompile_b36e664b03ac470958023a47647b6d315746da9e_output.jar net/minecraft/client/renderer/entity/LivingEntityRenderer.java)",
       "Bash(unzip -p /home/rag/.gradle/caches/neoformruntime/intermediate_results/decompile_b36e664b03ac470958023a47647b6d315746da9e_output.jar net/minecraft/client/model/Model.java)",
-      "Bash(xargs -I{} bash -c 'unzip -l \"{}\" 2>/dev/null | grep -q \"LivingEntityRenderer.class\" && echo \"{}\"')"
+      "Bash(xargs -I{} bash -c 'unzip -l \"{}\" 2>/dev/null | grep -q \"LivingEntityRenderer.class\" && echo \"{}\"')",
+      "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -i \"lilypad\\\\|lily_pad\" | grep \"\\\\.class\" | head -3 && echo \"in: {}\"')",
+      "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -i \"lilypad\" | head -2 && echo \"in: {}\"')",
+      "Bash(./gradlew dependencies *)",
+      "Bash(unzip -p /home/rag/.local/share/ModrinthApp/profiles/Performium/.fabric/remappedJars/minecraft-1.21.11-0.18.4/client-intermediary.jar assets/minecraft/models/block/cave_vines.json)",
+      "Bash(unzip -p /home/rag/.local/share/ModrinthApp/profiles/Performium/.fabric/remappedJars/minecraft-1.21.11-0.18.4/client-intermediary.jar assets/minecraft/models/block/cave_vines_plant.json)",
+      "Bash(xargs -I{} sh -c 'unzip -l \"{}\" 2>/dev/null | grep -q \"Projectile.class\" && echo \"{}\"')",
+      "Bash(xargs -P4 -I{} sh -c 'unzip -p \"{}\" net/minecraft/world/entity/projectile/Projectile.class 2>/dev/null | strings | grep -q \"updateRotation\" && echo \"{}\"')",
+      "Bash(xargs -P4 -I{} sh -c 'unzip -p \"{}\" net/minecraft/world/entity/projectile/Projectile.java 2>/dev/null | grep -q \"atan2\" && echo \"{}:source\"')",
+      "Bash(unzip -p /home/rag/.gradle/caches/neoformruntime/intermediate_results/decompile_b36e664b03ac470958023a47647b6d315746da9e_output.jar net/minecraft/world/entity/projectile/Projectile.java)"
     ]
   }
 }

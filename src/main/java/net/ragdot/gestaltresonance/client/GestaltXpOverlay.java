@@ -25,6 +25,7 @@ public class GestaltXpOverlay {
         if (!isBar && !isLevel) return;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc.options.hideGui) return;
         if (!(mc.player instanceof LocalPlayer player)) return;
 
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());

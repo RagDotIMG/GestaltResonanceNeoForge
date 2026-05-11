@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "gestaltresonance:block/pop_vine" },
+    "facing=south": { "model": "gestaltresonance:block/pop_vine", "y": 180 },
+    "facing=east":  { "model": "gestaltresonance:block/pop_vine", "y": 90 },
+    "facing=west":  { "model": "gestaltresonance:block/pop_vine", "y": 270 }
+  }
+}
