@@ -1,5 +1,6 @@
 package net.ragdot.gestaltresonance.mixin;
 
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -18,15 +19,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Jade, and any other mod — naturally treat the gestalt as a real tool without
  * requiring a Jade dependency or any per-mod special casing.
  *
+ * getMainHandItem() is defined on LivingEntity, not Player — we target LivingEntity
+ * and guard on instanceof Player so non-player entities are unaffected.
+ *
  * If the player is actually holding something, this mixin is a no-op.
  */
-@Mixin(Player.class)
+@Mixin(LivingEntity.class)
 public class PlayerMainHandMixin {
 
     @Inject(method = "getMainHandItem", at = @At("RETURN"), cancellable = true)
     private void gestalt$virtualMainHandItem(CallbackInfoReturnable<ItemStack> cir) {
+        if (!((Object) this instanceof Player self)) return;
         if (!cir.getReturnValue().isEmpty()) return;
-        Player self = (Player) (Object) this;
         PlayerGestaltState state = self.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
         ItemStack virtual = GestaltMiningEvents.getVirtualTool(self.getUUID());
