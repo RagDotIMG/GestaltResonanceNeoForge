@@ -35,6 +35,13 @@ public abstract class ItemInHandRendererSkipItemMixin {
             PlayerGestaltState state = p.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (state.isSoulProjecting()) {
                 ci.cancel();
+                return;
+            }
+            // Hide the virtual tool from rendering — the gestalt is the one "holding" it,
+            // not the player. Only suppress when the player's actual hand is empty
+            // (i.e. the item being rendered is our injected virtual tool, not a real item).
+            if (state.isSummoned() && p.getInventory().getSelected().isEmpty()) {
+                ci.cancel();
             }
         }
     }

@@ -122,6 +122,31 @@ public class GestaltResonanceClient {
             state.tickSummonProgress();
             GestaltPlayerLayer.tickSmoothedYaw(player);
 
+            // Update the virtual tool cache for the local player every tick so that
+            // Jade (and any other mod using getMainHandItem) sees the right tool type
+            // even when the player is just hovering over a block, not actively mining.
+            if (player == mc.player && state.isSummoned() && mc.level != null) {
+                net.ragdot.gestaltresonance.common.GestaltStats stats =
+                        net.ragdot.gestaltresonance.common.GestaltStatsRegistry.getStats(state.getGestaltId());
+                if (stats != null) {
+                    double range = net.ragdot.gestaltresonance.common.GestaltCosts.mineRangeFor(state);
+                    net.minecraft.world.phys.HitResult hit = player.pick(range, 0f, false);
+                    if (hit instanceof net.minecraft.world.phys.BlockHitResult bhr
+                            && bhr.getType() != net.minecraft.world.phys.HitResult.Type.MISS) {
+                        net.minecraft.world.level.block.state.BlockState blockState =
+                                mc.level.getBlockState(bhr.getBlockPos());
+                        int tier = net.ragdot.gestaltresonance.common.GestaltMiningEvents.strengthToTier(stats.strength());
+                        net.ragdot.gestaltresonance.common.GestaltMiningEvents.setVirtualTool(
+                                player.getUUID(),
+                                net.ragdot.gestaltresonance.common.GestaltMiningEvents.virtualToolFor(blockState, tier));
+                    } else {
+                        net.ragdot.gestaltresonance.common.GestaltMiningEvents.clearVirtualTool(player.getUUID());
+                    }
+                }
+            } else if (player == mc.player && !state.isSummoned()) {
+                net.ragdot.gestaltresonance.common.GestaltMiningEvents.clearVirtualTool(player.getUUID());
+            }
+
             // Client-side travel progression for charged strike. Server is authoritative for the
             // strike trigger (transitions to HIT_3 via SyncAttackActionS2C). The client mirrors
             // the per-tick advancement so renderers can lerp smoothly toward the target.
