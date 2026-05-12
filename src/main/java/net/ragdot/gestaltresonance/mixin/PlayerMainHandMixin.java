@@ -3,9 +3,7 @@ package net.ragdot.gestaltresonance.mixin;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltMiningEvents;
-import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,9 +29,10 @@ public class PlayerMainHandMixin {
     private void gestalt$virtualMainHandItem(CallbackInfoReturnable<ItemStack> cir) {
         if (!((Object) this instanceof Player self)) return;
         if (!cir.getReturnValue().isEmpty()) return;
-        PlayerGestaltState state = self.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (!state.isSummoned()) return;
-        ItemStack virtual = GestaltMiningEvents.getVirtualTool(self.getUUID());
+        // Compute fresh every call — raycast off the player's current crosshair to pick
+        // the right tool TYPE for the block being looked at. No cache, so the tool
+        // updates instantly as the crosshair moves between blocks (matters for Jade).
+        ItemStack virtual = GestaltMiningEvents.computeVirtualTool(self);
         if (virtual != null) cir.setReturnValue(virtual);
     }
 }

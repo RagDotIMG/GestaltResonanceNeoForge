@@ -14,37 +14,34 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 public class GestaltMiningEvents {
 
-    // Per-player virtual tool cache.
-    // Populated by onBreakSpeed (both sides, during active mining) and by the client
-    // level tick (for local player when hovering over a block, so Jade sees it too).
-    private static final Map<UUID, ItemStack> toolCache = new HashMap<>();
-
-    /** Returns the virtual tool currently assigned to a player, or null if none. */
-    public static ItemStack getVirtualTool(UUID uuid) {
-        return toolCache.get(uuid);
-    }
-
-    /** Set the virtual tool for a player (called from client tick for Jade support). */
-    public static void setVirtualTool(UUID uuid, ItemStack tool) {
-        toolCache.put(uuid, tool);
-    }
-
-    /** Clear the virtual tool for a player (called when gestalt is unsummoned or out of range). */
-    public static void clearVirtualTool(UUID uuid) {
-        toolCache.remove(uuid);
+    /**
+     * Computes the virtual tool the gestalt should be "holding" right now, based on
+     * the block the player is currently looking at. Returns null if the gestalt isn't
+     * summoned, no stats are known, or the player isn't targeting a block in range.
+     *
+     * Called from PlayerMainHandMixin on every getMainHandItem() lookup, so the tool
+     * type updates in real time as the crosshair moves between blocks. This is what
+     * Jade and any other tool-aware mod will see.
+     */
+    public static ItemStack computeVirtualTool(Player player) {
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned()) return null;
+        GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
+        if (stats == null) return null;
+        double range = GestaltCosts.mineRangeFor(state);
+        HitResult hit = player.pick(range, 0f, false);
+        if (!(hit instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return null;
+        BlockState blockState = player.level().getBlockState(bhr.getBlockPos());
+        int tier = strengthToTier(stats.strength());
+        return virtualToolFor(blockState, tier);
     }
 
     /**
      * Fires on both logical sides (client for animation, server for actual timing).
      * Overrides mining speed to the gestalt's tier value, ignoring the held tool.
      * Sets speed to 0 if the gestalt's tier is insufficient for the block.
-     * Also keeps the server-side virtual tool cache up to date while mining.
      */
     @SubscribeEvent
     public void onBreakSpeed(PlayerEvent.BreakSpeed event) {
@@ -52,33 +49,28 @@ public class GestaltMiningEvents {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
 
-        if (!isLookingAtBlockInRange(player)) {
-            toolCache.remove(player.getUUID());
-            return;
-        }
+        if (!isLookingAtBlockInRange(player)) return;
 
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         if (stats == null) return;
 
         int tier = strengthToTier(stats.strength());
-        BlockState blockState = event.getState();
-
-        if (!canTierMine(tier, blockState)) {
-            toolCache.remove(player.getUUID());
+        if (!canTierMine(tier, event.getState())) {
             event.setNewSpeed(0f);
             return;
         }
 
-        // Keep cache fresh so getMainHandItem mixin always has the right tool.
-        toolCache.put(player.getUUID(), virtualToolFor(blockState, tier));
         event.setNewSpeed(tierToSpeed(tier));
     }
 
     /**
-     * Server-side: cancels the break if the gestalt tier is insufficient.
-     * Drop generation is now handled naturally by vanilla because our
-     * PlayerMainHandMixin makes getMainHandItem() return the correct virtual
-     * tool, so requiresCorrectToolForDrops checks and loot tables all pass.
+     * Server-side: cancels the break only when the gestalt tier is insufficient.
+     * When the tier IS sufficient, vanilla's break flow handles everything:
+     *   1. Vanilla calls getMainHandItem() BEFORE removing the block, so our
+     *      PlayerMainHandMixin raycast succeeds and returns the correct virtual tool.
+     *   2. PlayerHasCorrectToolMixin makes hasCorrectToolForDrops() return true.
+     *   3. Vanilla calls playerDestroy() with the virtual tool — loot tables run
+     *      normally, including any modded conditions, with the right tool context.
      */
     @SubscribeEvent
     public void onBlockBreak(BlockEvent.BreakEvent event) {
@@ -132,7 +124,7 @@ public class GestaltMiningEvents {
      * Delegates to isCorrectToolForDrops so both vanilla and modded blocks are
      * handled without hardcoding any tag lists.
      */
-    private static boolean canTierMine(int tier, BlockState state) {
+    public static boolean canTierMine(int tier, BlockState state) {
         if (!state.requiresCorrectToolForDrops()) return true;
         return virtualToolFor(state, tier).isCorrectToolForDrops(state);
     }
