@@ -32,6 +32,7 @@ import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
 import net.ragdot.gestaltresonance.common.GestaltBlocks;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1S;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
 import net.ragdot.gestaltresonance.common.power.pop_pod.PopPodPower1B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
 import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
@@ -131,6 +132,7 @@ public class GestaltResonance {
         AmenBreakPower1S.register();
         PopPodPower1B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
+        NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
 
         // Config
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -177,6 +179,8 @@ public class GestaltResonance {
                 GestaltSoulProjectionEvents.teardown(player, SoulProjectionExitType.CLEAN, null, 0f);
                 state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             }
+            // Disarm Phase Out on logout — armed state should not survive reconnect.
+            AmenBreakPower2G.disarm(player);
             if (state.isSummoned()) {
                 // Deactivate passive before clearing summon
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
@@ -200,6 +204,14 @@ public class GestaltResonance {
         }
     }
 
+    /** Reset Phase Out armed/active state when the player respawns (died with it armed). */
+    @SubscribeEvent
+    public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            AmenBreakPower2G.disarm(player);
+        }
+    }
+
     /** When a player starts tracking another player, sync the tracked player's gestalt state. */
     @SubscribeEvent
     public void onStartTracking(PlayerEvent.StartTracking event) {
@@ -218,6 +230,7 @@ public class GestaltResonance {
             WallSlideLogic.tickPlayer(player);
             GestaltSoulProjectionEvents.tickSoulProjection(player);
             AmenBreakPower1G.tick(player);
+            AmenBreakPower2G.tick(player);
 
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (state.isSummoned()) {

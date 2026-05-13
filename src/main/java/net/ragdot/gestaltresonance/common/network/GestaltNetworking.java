@@ -33,6 +33,7 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerKey;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
 
@@ -98,6 +99,9 @@ public class GestaltNetworking {
         registrar.playToClient(SyncCooldownS2C.TYPE, SyncCooldownS2C.STREAM_CODEC, GestaltNetworking::handleSyncCooldown);
         // Hit-chain particle burst
         registrar.playToClient(SpawnHitParticlesS2C.TYPE, SpawnHitParticlesS2C.STREAM_CODEC, GestaltNetworking::handleSpawnHitParticles);
+        // Phase Out (Power 2G)
+        registrar.playToServer(PhaseOutToggleC2S.TYPE, PhaseOutToggleC2S.STREAM_CODEC, GestaltNetworking::handlePhaseOutToggle);
+        registrar.playToClient(PhaseOutStateSyncS2C.TYPE, PhaseOutStateSyncS2C.STREAM_CODEC, GestaltNetworking::handlePhaseOutStateSync);
     }
 
     private static void handleAttackInput(AttackInputC2S packet, IPayloadContext ctx) {
@@ -792,5 +796,39 @@ public class GestaltNetworking {
         PacketDistributor.sendToPlayer(serverPlayer,
                 new SoulProjectionYankS2C(serverPlayer.getId(), exitType.toByte(), damageAmount,
                         snapPos.x, snapPos.y, snapPos.z));
+    }
+
+    // ── Phase Out (Power 2G) ─────────────────────────────────────────────────
+
+    private static void handlePhaseOutToggle(PhaseOutToggleC2S packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (ctx.player() instanceof ServerPlayer serverPlayer) {
+                AmenBreakPower2G.toggle(serverPlayer);
+            }
+        });
+    }
+
+    private static void handlePhaseOutStateSync(PhaseOutStateSyncS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onPhaseOutStateCallback != null) {
+                onPhaseOutStateCallback.accept(packet);
+            }
+        });
+    }
+
+    /** Client-side callback invoked when Phase Out state changes. */
+    public static java.util.function.Consumer<PhaseOutStateSyncS2C> onPhaseOutStateCallback = null;
+
+    /** Send the current Phase Out state to the owning player's client. */
+    public static void syncPhaseOutToPlayer(ServerPlayer serverPlayer) {
+        PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        int resonance = Math.max(0, state.getResonanceValue());
+        boolean canAfford = resonance + state.getTotalGestaltXp() >= GestaltCosts.PHASE_OUT_COST_TOTAL;
+        PacketDistributor.sendToPlayer(serverPlayer,
+                new PhaseOutStateSyncS2C(
+                        state.isPhaseOutArmed(),
+                        state.isPhaseOutActive(),
+                        state.getPhaseOutCooldownTicks(),
+                        canAfford));
     }
 }

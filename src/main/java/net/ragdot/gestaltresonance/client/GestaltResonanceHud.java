@@ -8,6 +8,7 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.common.network.PhaseOutStateSyncS2C;
 
 /**
  * Draws the resonance/dissonance momentum bar at the bottom-left of the screen.
@@ -39,6 +40,20 @@ public class GestaltResonanceHud {
     // Fade state: track when the resonance value last changed.
     private static int  lastTrackedValue  = Integer.MIN_VALUE;
     private static long lastChangedTime   = 0L;
+
+    // Phase Out indicator state (updated from PhaseOutStateSyncS2C)
+    private static boolean phaseOutArmed       = false;
+    private static boolean phaseOutActive      = false;
+    private static int     phaseOutCooldown    = 0;
+    private static boolean phaseOutCanAfford   = false;
+
+    /** Called from GestaltNetworking callback when Phase Out state changes. */
+    public static void onPhaseOutState(PhaseOutStateSyncS2C packet) {
+        phaseOutArmed     = packet.armed();
+        phaseOutActive    = packet.active();
+        phaseOutCooldown  = packet.cooldownTicks();
+        phaseOutCanAfford = packet.canAfford();
+    }
 
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
@@ -120,6 +135,51 @@ public class GestaltResonanceHud {
             } else {
                 graphics.fill(divX, barY, divX + 1, barY + BAR_HEIGHT, withAlpha(COLOR_DIVIDER, alpha));
             }
+        }
+
+        // Phase Out indicator: small square to the right of the resonance bar.
+        drawPhaseOutIndicator(graphics, BAR_X + barWidth + 4, barY - 1, alpha);
+    }
+
+    // Phase Out indicator constants
+    private static final int PO_INNER_W = 5;
+    private static final int PO_INNER_H = 7;
+    private static final int PO_COLOR_ARMED  = 0xFFFFFFFF; // white
+    private static final int PO_COLOR_OFF    = 0xFF666666; // grey
+
+    private static void drawPhaseOutIndicator(net.minecraft.client.gui.GuiGraphics g,
+                                               int x, int y, float alpha) {
+        // Only show when there is something to communicate (armed, active, or on cooldown)
+        if (!phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0) return;
+
+        int borderColor = withAlpha(COLOR_EQUILIBRIUM, alpha);
+        int outerW = PO_INNER_W + 2;
+        int outerH = PO_INNER_H + 2;
+        int ix = x + 1; // inner top-left X
+        int iy = y + 1; // inner top-left Y
+
+        // Outer 1px border
+        g.fill(x, y, x + outerW, y + 1,             borderColor); // top
+        g.fill(x, y + outerH - 1, x + outerW, y + outerH, borderColor); // bottom
+        g.fill(x, y, x + 1, y + outerH,             borderColor); // left
+        g.fill(x + outerW - 1, y, x + outerW, y + outerH, borderColor); // right
+
+        // Inner fill
+        if (phaseOutCooldown > 0) {
+            // Cooldown: grey background, white fills from bottom as cooldown elapses
+            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_OFF, alpha));
+            float fraction = 1f - (float) phaseOutCooldown / GestaltCosts.PHASE_OUT_COOLDOWN_TICKS;
+            int fillH = Math.round(fraction * PO_INNER_H);
+            if (fillH > 0) {
+                int fillY = iy + PO_INNER_H - fillH;
+                g.fill(ix, fillY, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_ARMED, alpha));
+            }
+        } else if (phaseOutArmed || phaseOutActive) {
+            // Armed or ghost window active: solid white
+            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_ARMED, alpha));
+        } else {
+            // Off (no cooldown, not armed): solid grey
+            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_OFF, alpha));
         }
     }
 

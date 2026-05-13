@@ -20,6 +20,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.ragdot.gestaltresonance.GestaltResonance;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.GestaltAction;
+import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
@@ -71,6 +72,13 @@ public class GestaltAcquisitionEvents {
 
         boolean wasGuarding = state.isGuarding();
         long currentTick = player.getServer().getTickCount();
+
+        // If a Phase Out ghost window is active, end it (crash supersedes the protection)
+        if (state.isPhaseOutActive()) {
+            state.setPhaseOutActive(false);
+            state.setPhaseOutTicksRemaining(0);
+            GhostPlayerHandler.setGhostState(player, false);
+        }
 
         GestaltThrowEvents.cancelThrow(player);
         state.clearGuard();

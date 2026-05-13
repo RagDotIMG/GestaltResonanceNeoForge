@@ -16,6 +16,9 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 
 public class GestaltMiningEvents {
 
+    // pick() → EntityCollisionContext → getMainHandItem() → computeVirtualTool() → pick() → ...
+    private static final ThreadLocal<Boolean> computing = ThreadLocal.withInitial(() -> false);
+
     /**
      * Computes the virtual tool the gestalt should be "holding" right now, based on
      * the block the player is currently looking at. Returns null if the gestalt isn't
@@ -26,16 +29,22 @@ public class GestaltMiningEvents {
      * Jade and any other tool-aware mod will see.
      */
     public static ItemStack computeVirtualTool(Player player) {
-        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (!state.isSummoned()) return null;
-        GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
-        if (stats == null) return null;
-        double range = GestaltCosts.mineRangeFor(state);
-        HitResult hit = player.pick(range, 0f, false);
-        if (!(hit instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return null;
-        BlockState blockState = player.level().getBlockState(bhr.getBlockPos());
-        int tier = strengthToTier(stats.strength());
-        return virtualToolFor(blockState, tier);
+        if (computing.get()) return null;
+        computing.set(true);
+        try {
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            if (!state.isSummoned()) return null;
+            GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
+            if (stats == null) return null;
+            double range = GestaltCosts.mineRangeFor(state);
+            HitResult hit = player.pick(range, 0f, false);
+            if (!(hit instanceof BlockHitResult bhr) || bhr.getType() == HitResult.Type.MISS) return null;
+            BlockState blockState = player.level().getBlockState(bhr.getBlockPos());
+            int tier = strengthToTier(stats.strength());
+            return virtualToolFor(blockState, tier);
+        } finally {
+            computing.set(false);
+        }
     }
 
     /**

@@ -52,6 +52,7 @@ import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
+import net.ragdot.gestaltresonance.common.network.PhaseOutToggleC2S;
 import net.ragdot.gestaltresonance.common.network.PowerActivateC2S;
 import net.ragdot.gestaltresonance.common.network.SoulProjectionActivateC2S;
 import net.ragdot.gestaltresonance.common.network.SoulProjectionExitC2S;
@@ -148,7 +149,10 @@ public class GestaltKeybinds {
             PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte()));
         }
         while (POWER_2.get().consumeClick()) {
-            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 2 pressed"), false);
+            // X+Guard: toggle Phase Out armed state.
+            if (state.isGuarding()) {
+                PacketDistributor.sendToServer(new PhaseOutToggleC2S());
+            }
         }
         while (POWER_3.get().consumeClick()) {
             mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 3 pressed"), false);

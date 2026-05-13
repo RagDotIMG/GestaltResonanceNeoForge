@@ -149,6 +149,17 @@ public final class GestaltCosts {
     /** Distance (blocks) within which a PopSprout triggers on a nearby mob. */
     public static final double POP_SPROUT_TRIGGER_DISTANCE = 2.5;
 
+    // ── Amen Break Phase Out (Power 2G) ──────────────────────────────────────
+
+    /** Total resonance + gestaltXP cost to trigger Phase Out. */
+    public static final int PHASE_OUT_COST_TOTAL = 25;
+
+    /** Duration of the ghost window in ticks (3 seconds). */
+    public static final int PHASE_OUT_GHOST_TICKS = 60;
+
+    /** Cooldown after the ghost window ends, in ticks (2 minutes). */
+    public static final int PHASE_OUT_COOLDOWN_TICKS = 2400;
+
     // ── Soul projection ──────────────────────────────────────────────────────
 
     /** Cooldown after a CLEAN exit (right-click own body double). */

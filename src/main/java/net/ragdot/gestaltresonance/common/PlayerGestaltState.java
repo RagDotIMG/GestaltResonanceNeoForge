@@ -162,6 +162,16 @@ public class PlayerGestaltState {
     private int markedEntityTicksRemaining = 0;
     @Nullable private Vec3 markedEntityLastPos;
 
+    // --- Phase Out state (transient, not serialized) ---
+    /** True when Phase Out is armed (toggled by X+Guard). Resets on death/logout. */
+    private boolean phaseOutArmed = false;
+    /** True during the 60-tick ghost window after Phase Out triggers. */
+    private boolean phaseOutActive = false;
+    /** Ticks remaining in the current Phase Out ghost window. */
+    private int phaseOutTicksRemaining = 0;
+    /** Server-side cooldown countdown. Decrements each tick when > 0. */
+    private int phaseOutCooldownTicks = 0;
+
     // --- Soul projection state (transient, not serialized) ---
     private boolean soulProjecting = false;
     private int bodyDoubleEntityId = -1;
@@ -405,6 +415,17 @@ public class PlayerGestaltState {
     // --- Ghost state accessors ---
     public boolean isGhostState() { return ghostState; }
     public void setGhostState(boolean v) { ghostState = v; }
+
+    // --- Phase Out accessors ---
+    public boolean isPhaseOutArmed() { return phaseOutArmed; }
+    public void setPhaseOutArmed(boolean v) { phaseOutArmed = v; }
+    public boolean isPhaseOutActive() { return phaseOutActive; }
+    public void setPhaseOutActive(boolean v) { phaseOutActive = v; }
+    public int getPhaseOutTicksRemaining() { return phaseOutTicksRemaining; }
+    public void setPhaseOutTicksRemaining(int t) { phaseOutTicksRemaining = t; }
+    public int getPhaseOutCooldownTicks() { return phaseOutCooldownTicks; }
+    public void setPhaseOutCooldownTicks(int t) { phaseOutCooldownTicks = Math.max(0, t); }
+    public boolean hasPhaseOutCooldown() { return phaseOutCooldownTicks > 0; }
 
     // --- Power state accessors ---
     public long getPowerCooldownUntilTick() { return powerCooldownUntilTick; }
@@ -667,6 +688,10 @@ public class PlayerGestaltState {
                 selectedSkin, new ArrayList<>(unlockedSkins), gestaltCrashCount, resonanceValue);
         c.currentAction = this.currentAction;
         c.ghostState = this.ghostState;
+        c.phaseOutArmed = this.phaseOutArmed;
+        c.phaseOutActive = this.phaseOutActive;
+        c.phaseOutTicksRemaining = this.phaseOutTicksRemaining;
+        c.phaseOutCooldownTicks = this.phaseOutCooldownTicks;
         c.powerCooldownUntilTick = this.powerCooldownUntilTick;
         c.powerWindupStartTick = this.powerWindupStartTick;
         c.markedEntityId = this.markedEntityId;

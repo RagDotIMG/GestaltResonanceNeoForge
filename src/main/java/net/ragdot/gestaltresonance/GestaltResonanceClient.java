@@ -33,6 +33,7 @@ import net.ragdot.gestaltresonance.client.GestaltPlayerLayer;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
+import net.ragdot.gestaltresonance.common.network.PhaseOutStateSyncS2C;
 
 @Mod(value = GestaltResonance.MODID, dist = Dist.CLIENT)
 public class GestaltResonanceClient {
@@ -85,6 +86,9 @@ public class GestaltResonanceClient {
 
         // Bridge: soul projection yank → shake intensity + sound vary by exit type.
         GestaltNetworking.onSoulProjectionYankCallback = SoulProjectionClientHandler::onYank;
+
+        // Bridge: Phase Out state change → activation shake when ghost window starts.
+        GestaltNetworking.onPhaseOutStateCallback = GestaltResonanceClient::onPhaseOutState;
 
         // Bridge: hit-chain impact packet → single wind-charge gust particle.
         GestaltNetworking.onHitParticlesCallback = packet -> {
@@ -158,5 +162,15 @@ public class GestaltResonanceClient {
                 GestaltFirstPersonRenderer.setModel(model);
             }
         }
+    }
+
+    private static boolean prevPhaseOutActive = false;
+
+    private static void onPhaseOutState(PhaseOutStateSyncS2C packet) {
+        if (packet.active() && !prevPhaseOutActive) {
+            SoulProjectionClientHandler.triggerActivationShake();
+        }
+        prevPhaseOutActive = packet.active();
+        GestaltResonanceHud.onPhaseOutState(packet);
     }
 }
