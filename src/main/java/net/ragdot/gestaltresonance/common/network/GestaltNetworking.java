@@ -810,6 +810,12 @@ public class GestaltNetworking {
 
     private static void handlePhaseOutStateSync(PhaseOutStateSyncS2C packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
+            net.minecraft.world.entity.player.Player player = ctx.player();
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            state.setPhaseOutArmed(packet.armed());
+            state.setPhaseOutActive(packet.active());
+            state.setPhaseOutCooldownTicks(packet.cooldownTicks());
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             if (onPhaseOutStateCallback != null) {
                 onPhaseOutStateCallback.accept(packet);
             }

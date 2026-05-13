@@ -34,13 +34,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(PlayerRenderer.class)
 public abstract class PlayerRendererHandTranslucencyMixin {
 
-    @Inject(method = "renderHand", at = @At("HEAD"))
+    @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
     private void gestaltresonance$pre(PoseStack pose, MultiBufferSource buf, int light,
                                       AbstractClientPlayer player, ModelPart arm, ModelPart sleeve,
                                       CallbackInfo ci) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (state.isSoulProjecting()) {
             RenderSystem.setShaderColor(1f, 1f, 1f, 0.3f);
+        } else if (state.isSummoned() && player.getInventory().getSelected().isEmpty()) {
+            ci.cancel();
         }
     }
 
