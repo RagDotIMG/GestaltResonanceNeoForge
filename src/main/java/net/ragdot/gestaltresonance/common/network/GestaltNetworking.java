@@ -449,8 +449,14 @@ public class GestaltNetworking {
             PlayerGestaltState state = targetPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             state.setCrashingOut(true);
             targetPlayer.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            if (target == player && onSelfCrashCallback != null) {
+                onSelfCrashCallback.run();
+            }
         });
     }
+
+    /** Client-side callback invoked when the local player's own gestalt crashes. */
+    public static Runnable onSelfCrashCallback = null;
 
     /**
      * Client-side callback invoked on a fall break impact for the given player UUID.

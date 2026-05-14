@@ -17,6 +17,7 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.ragdot.gestaltresonance.client.GestaltCooldownHud;
+import net.ragdot.gestaltresonance.client.GestaltStatusHud;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientInput;
@@ -59,6 +60,7 @@ public class GestaltResonanceClient {
         NeoForge.EVENT_BUS.addListener(GestaltXpOverlay::onRenderGuiLayer);
         NeoForge.EVENT_BUS.addListener(GestaltCooldownHud::onRenderGuiLayer);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceHud::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(GestaltStatusHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientHandler::onCameraAngles);
         // Soul projection client-side input gating (block break/place/use) and movement prediction
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onLeftClickBlock);
@@ -89,6 +91,9 @@ public class GestaltResonanceClient {
 
         // Bridge: Phase Out state change → activation shake when ghost window starts.
         GestaltNetworking.onPhaseOutStateCallback = GestaltResonanceClient::onPhaseOutState;
+
+        // Bridge: local player's gestalt crash → status icon cooldown fill.
+        GestaltNetworking.onSelfCrashCallback = GestaltStatusHud::onSelfCrash;
 
         // Bridge: hit-chain impact packet → single wind-charge gust particle.
         GestaltNetworking.onHitParticlesCallback = packet -> {

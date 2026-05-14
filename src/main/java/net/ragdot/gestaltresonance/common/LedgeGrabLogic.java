@@ -213,6 +213,14 @@ public class LedgeGrabLogic {
         // Re-enable gravity before mantle boost
         player.setNoGravity(false);
 
+        // Force the client to rebase from the exact hang position before the boost fires.
+        // setPos() only updates the server; without this the client applies the boost from
+        // its stale predicted position (often lower), causing the player to fall short.
+        Vec3 anchor = state.getAnchorPos();
+        if (anchor != null) {
+            player.connection.teleport(anchor.x, anchor.y, anchor.z, player.getYRot(), player.getXRot());
+        }
+
         // Apply initial boost
         double boostX = face.getStepX() * -MANTLE_FORWARD_SPEED; // toward the wall (opposite of face)
         double boostZ = face.getStepZ() * -MANTLE_FORWARD_SPEED;

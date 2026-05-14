@@ -15,6 +15,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -48,6 +51,10 @@ public class GestaltFirstPersonRenderer {
     private static final float ATTACK_OFFSET_X = 1.5F;
     private static final float ATTACK_OFFSET_Z = 1.5F;
 
+
+    // Frozen world-space position captured on the first HIT_3 frame so the gestalt
+    // stays in place for the remainder of the strike rather than following the target.
+    private static final Map<UUID, double[]> frozenStrikeHitPos = new HashMap<>();
 
     private static long windupStartGameTime = -1L;
 
@@ -122,11 +129,11 @@ public class GestaltFirstPersonRenderer {
             PlayerGestaltState pState = acp.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (!pState.isSummoned()) continue;
             int targetId = pState.getChargedStrikeTargetEntityId();
-            if (targetId < 0) continue;
+            if (targetId < 0) { frozenStrikeHitPos.remove(acp.getUUID()); continue; }
             GestaltAction pAction = pState.getAction();
             boolean traveling = pAction == GestaltAction.CHARGED_STRIKE_TRAVEL;
             boolean strikeAtTarget = pAction == GestaltAction.HIT_3;
-            if (!traveling && !strikeAtTarget) continue;
+            if (!traveling && !strikeAtTarget) { frozenStrikeHitPos.remove(acp.getUUID()); continue; }
 
             net.minecraft.world.entity.Entity rawTarget = mc.level.getEntity(targetId);
             if (rawTarget == null) continue;
@@ -140,9 +147,26 @@ public class GestaltFirstPersonRenderer {
 
             double fx, fy, fz;
             if (strikeAtTarget) {
-                // Render directly at the target.
-                fx = tx; fy = ty; fz = tz;
+                double[] frozen = frozenStrikeHitPos.get(acp.getUUID());
+                if (frozen == null) {
+                    // First HIT_3 frame: compute offset position and freeze it.
+                    double dxApp = tx - lx;
+                    double dzApp = tz - lz;
+                    double horizDist = Math.sqrt(dxApp * dxApp + dzApp * dzApp);
+                    if (horizDist > 0.001) {
+                        fx = tx - (dxApp / horizDist) * 0.5;
+                        fz = tz - (dzApp / horizDist) * 0.5;
+                    } else {
+                        fx = tx;
+                        fz = tz;
+                    }
+                    fy = ty;
+                    frozenStrikeHitPos.put(acp.getUUID(), new double[]{fx, fy, fz});
+                } else {
+                    fx = frozen[0]; fy = frozen[1]; fz = frozen[2];
+                }
             } else {
+                frozenStrikeHitPos.remove(acp.getUUID());
                 // Travel: smooth t = (traveled + speedPerTick * partialTick) / dist(launch, target_now).
                 int tier = pState.getChargedStrikeSpeedTier();
                 double speedPerTick = (tier >= 1 && tier < GestaltCosts.CHARGED_STRIKE_TRAVEL_SPEED_BY_SPD.length)
