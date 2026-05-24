@@ -22,6 +22,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.ragdot.gestaltresonance.common.GestaltDelayedPlacer;
+import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
 import net.ragdot.gestaltresonance.common.GestaltAcquisitionEvents;
 import net.ragdot.gestaltresonance.common.GestaltEntities;
@@ -30,10 +32,16 @@ import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
 import net.ragdot.gestaltresonance.common.GestaltBlocks;
+import net.ragdot.gestaltresonance.common.GestaltIllusionEvents;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1S;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2B;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
-import net.ragdot.gestaltresonance.common.power.pop_pod.PopPodPower1B;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2S;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1B;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3B;
+import net.ragdot.gestaltresonance.common.entity.PhaseBlossomEntity;
+import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
 import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -47,7 +55,10 @@ import net.ragdot.gestaltresonance.common.skin.GestaltSkinUnlockEvents;
 import net.ragdot.gestaltresonance.common.GestaltDataComponents;
 import net.ragdot.gestaltresonance.common.GestaltMobEffects;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
+import net.ragdot.gestaltresonance.common.GestaltDamageBankingEvents;
+import net.ragdot.gestaltresonance.common.GestaltCommand;
 import net.ragdot.gestaltresonance.common.LedgeGrabLogic;
+import net.ragdot.gestaltresonance.common.loot.GestaltLootModifiers;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
@@ -66,9 +77,6 @@ public class GestaltResonance {
     // --- Item registry (for future gestalt-related items) ---
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
 
-    // Placeholder item so the creative tab has something to show
-    public static final DeferredItem<Item> GESTALT_SHARD = ITEMS.registerSimpleItem("gestalt_shard", new Item.Properties());
-
     // --- Gestalt acquisition items ---
     public static final DeferredItem<Item> NETHER_TEAR = ITEMS.registerItem("nether_tear", NetherTearItem::new, new Item.Properties());
     public static final DeferredItem<Item> RESONANT_POWDER = ITEMS.registerItem("resonant_powder", ResonantPowderItem::new, new Item.Properties());
@@ -83,9 +91,13 @@ public class GestaltResonance {
             CREATIVE_MODE_TABS.register("gestalt_tab", () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.gestaltresonance"))
                     .withTabsBefore(CreativeModeTabs.COMBAT)
-                    .icon(() -> GESTALT_SHARD.get().getDefaultInstance())
+                    .icon(() -> {
+                        net.minecraft.world.item.ItemStack icon = new net.minecraft.world.item.ItemStack(SOUL_VESSEL_EMPTY.get());
+                        net.ragdot.gestaltresonance.common.item.SoulVesselEmptyItem.writeStoredGestalt(
+                                icon, new net.ragdot.gestaltresonance.common.item.StoredGestaltData("gestaltresonance:amen_break", 1, 0));
+                        return icon;
+                    })
                     .displayItems((parameters, output) -> {
-                        output.accept(GESTALT_SHARD.get());
                         output.accept(NETHER_TEAR.get());
                         output.accept(RESONANT_POWDER.get());
                         output.accept(SOUL_VESSEL_EMPTY.get());
@@ -110,6 +122,8 @@ public class GestaltResonance {
         GestaltDataComponents.DATA_COMPONENTS.register(modEventBus);
         GestaltMobEffects.MOB_EFFECTS.register(modEventBus);
         GestaltSounds.SOUND_EVENTS.register(modEventBus);
+        GestaltLootModifiers.register(modEventBus);
+        GestaltParticles.PARTICLE_TYPES.register(modEventBus);
 
         // Game event bus listeners
         NeoForge.EVENT_BUS.register(this);
@@ -125,12 +139,19 @@ public class GestaltResonance {
         NeoForge.EVENT_BUS.register(new GestaltSkinUnlockEvents());
         NeoForge.EVENT_BUS.register(new GestaltResonanceEvents());
         NeoForge.EVENT_BUS.register(new GestaltSoulProjectionEvents());
+        NeoForge.EVENT_BUS.register(new GestaltDamageBankingEvents());
+        NeoForge.EVENT_BUS.register(GestaltIllusionEvents.INSTANCE);
+        NeoForge.EVENT_BUS.addListener(GestaltCommand::register);
 
         // Gestalt powers — each power's static block / register() call adds itself to the
         // GestaltPowerRegistry. Per-power event listeners (e.g. abort handlers) also subscribe here.
         AmenBreakPower1G.register();
         AmenBreakPower1S.register();
-        PopPodPower1B.register();
+        AmenBreakPower2B.register();
+        AmenBreakPower2S.register();
+        AmenBreakPower1B.register();
+        AmenBreakPower3B.register();
+        SpillwaysPower1B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
 
@@ -204,12 +225,33 @@ public class GestaltResonance {
         }
     }
 
-    /** Reset Phase Out armed/active state when the player respawns (died with it armed). */
+    /** Reset transient gestalt state when the player respawns after death. */
     @SubscribeEvent
     public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            AmenBreakPower2G.disarm(player);
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        AmenBreakPower2G.disarm(player);
+        PhaseBlossomEntity.dismissBlossom(player.serverLevel(), player.getUUID());
+
+        // copyOnDeath() preserved summoned=true — dismiss cleanly so the first G press summons.
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (state.isSummoned()) {
+            GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
+            if (passive != null) passive.onDeactivate(player);
+            state.setSummoned(false);
+            state.setAction(net.ragdot.gestaltresonance.common.GestaltAction.IDLE);
+            state.clearLedgeGrab();
+            state.clearWallSlide();
+            player.setNoGravity(false);
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            GestaltNetworking.syncToTracking(player);
         }
+
+        // copyOnDeath() preserves state server-side but the client attachment resets to
+        // defaults — re-sync so the HUD and skin reflect the actual (preserved) state.
+        GestaltNetworking.syncGestaltXpToPlayer(player);
+        GestaltNetworking.syncSelectedSkinToTracking(player);
+        GestaltNetworking.syncUnlockedSkinsToOwner(player);
     }
 
     /** When a player starts tracking another player, sync the tracked player's gestalt state. */
@@ -225,6 +267,7 @@ public class GestaltResonance {
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
         var server = event.getServer();
+        GestaltDelayedPlacer.tick(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             LedgeGrabLogic.tickPlayer(player);
             WallSlideLogic.tickPlayer(player);

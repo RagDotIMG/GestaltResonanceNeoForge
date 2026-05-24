@@ -46,6 +46,6 @@ public class PrimedBlockRenderer extends EntityRenderer<PrimedBlockEntity> {
 
     @Override
     public ResourceLocation getTextureLocation(PrimedBlockEntity entity) {
-        return TextureAtlas.LOCATION_BLOCKS;
+        return net.minecraft.resources.ResourceLocation.withDefaultNamespace("textures/atlas/blocks.png");
     }
 }

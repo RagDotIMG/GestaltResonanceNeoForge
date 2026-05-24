@@ -1,16 +1,23 @@
 package net.ragdot.gestaltresonance.common.power.amen_break;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
+import net.minecraft.server.level.ServerLevel;
 import net.ragdot.gestaltresonance.GestaltResonance;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltIds;
+import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
@@ -32,6 +39,10 @@ public final class AmenBreakPower2G {
 
     public static final AmenBreakPower2G EVENT_LISTENER = new AmenBreakPower2G();
 
+    private static final ResourceLocation PHASE_OUT_SLOW_ID =
+            ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "phase_out_slow");
+    private static final double PHASE_OUT_SLOW_AMOUNT = -0.3;
+
     private AmenBreakPower2G() {}
 
     // ── Toggle ────────────────────────────────────────────────────────────────
@@ -39,14 +50,16 @@ public final class AmenBreakPower2G {
     public static void toggle(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
-        // Only toggle if player has AmenBreak, is guarding, and is not in an active ghost window
+        // Only toggle if player has AmenBreak, is guarding, meets level requirement, and is not in an active ghost window
         if (!GestaltIds.AMEN_BREAK.equals(state.getGestaltId())) return;
         if (!state.isGuarding()) return;
+        if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[1][2]) return;
         if (state.isPhaseOutActive()) return;
 
         state.setPhaseOutArmed(!state.isPhaseOutArmed());
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
+        player.playNotifySound(SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.5f, 1.0f);
         GestaltNetworking.syncPhaseOutToPlayer(player);
         GestaltResonance.LOGGER.debug("AmenBreak Phase Out armed={} for {}", state.isPhaseOutArmed(), player.getName().getString());
     }
@@ -78,6 +91,16 @@ public final class AmenBreakPower2G {
             }
             state.setPhaseOutTicksRemaining(remaining);
             changed = true;
+
+            if (remaining >= GestaltCosts.PHASE_OUT_GHOST_TICKS - 10
+                    && player.level() instanceof ServerLevel sl) {
+                for (int i = 0; i < 2; i++) {
+                    double px = player.getX() + (player.getRandom().nextDouble() - 0.5) * 0.6;
+                    double py = player.getY() + player.getRandom().nextDouble() * 1.8;
+                    double pz = player.getZ() + (player.getRandom().nextDouble() - 0.5) * 0.6;
+                    sl.sendParticles(GestaltParticles.GESTALT_ILLUSION.get(), px, py, pz, 1, 0, 0, 0, 0);
+                }
+            }
         }
 
         if (changed) {
@@ -91,6 +114,7 @@ public final class AmenBreakPower2G {
         state.setPhaseOutTicksRemaining(0);
         state.setPhaseOutCooldownTicks(GestaltCosts.PHASE_OUT_COOLDOWN_TICKS);
         GhostPlayerHandler.setGhostState(player, false);
+        removeSlowModifier(player);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncPhaseOutToPlayer(player);
 
@@ -149,11 +173,12 @@ public final class AmenBreakPower2G {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
         GhostPlayerHandler.setGhostState(player, true);
+        applySlowModifier(player);
         GestaltNetworking.syncPhaseOutToPlayer(player);
         GestaltNetworking.syncResonanceToPlayer(player);
         if (xpPay > 0) GestaltNetworking.syncGestaltXpToPlayer(player);
 
-        player.playNotifySound(GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 0.8f);
+        player.playNotifySound(GestaltSounds.GESTALT_AB_2G.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
         GestaltResonance.LOGGER.debug("AmenBreak Phase Out triggered for {}", player.getName().getString());
     }
 
@@ -177,6 +202,20 @@ public final class AmenBreakPower2G {
         GestaltNetworking.syncToTracking(player);
     }
 
+    private static void applySlowModifier(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (attr == null) return;
+        attr.removeModifier(PHASE_OUT_SLOW_ID);
+        attr.addOrUpdateTransientModifier(new AttributeModifier(
+                PHASE_OUT_SLOW_ID, PHASE_OUT_SLOW_AMOUNT, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
+    }
+
+    private static void removeSlowModifier(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (attr == null) return;
+        attr.removeModifier(PHASE_OUT_SLOW_ID);
+    }
+
     /** Disarm Phase Out (called on death / logout to reset toggle state). */
     public static void disarm(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
@@ -186,6 +225,7 @@ public final class AmenBreakPower2G {
             state.setPhaseOutActive(false);
             state.setPhaseOutTicksRemaining(0);
             GhostPlayerHandler.setGhostState(player, false);
+            removeSlowModifier(player);
         }
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncPhaseOutToPlayer(player);

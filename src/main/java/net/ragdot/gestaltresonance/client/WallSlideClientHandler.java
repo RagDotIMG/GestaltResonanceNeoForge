@@ -2,13 +2,20 @@ package net.ragdot.gestaltresonance.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.ThrowInputC2S;
+
+import javax.annotation.Nullable;
 
 /**
  * Client-side wall slide input handler.
@@ -23,6 +30,8 @@ import net.ragdot.gestaltresonance.common.network.ThrowInputC2S;
 public class WallSlideClientHandler {
 
     private static boolean wasSpaceDown = false;
+    private static boolean wasSliding = false;
+    @Nullable private static SoundInstance wallSlideSoundInstance = null;
 
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
@@ -30,9 +39,25 @@ public class WallSlideClientHandler {
         if (player == null) return;
 
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        boolean isSliding = state.isWallSliding();
         boolean spaceDown = mc.options.keyJump.isDown();
 
-        if (state.isWallSliding()) {
+        if (isSliding && !wasSliding) {
+            wallSlideSoundInstance = new SimpleSoundInstance(
+                    GestaltSounds.GESTALT_WALLSLIDE.get(),
+                    SoundSource.PLAYERS,
+                    1.0f, 1.0f,
+                    RandomSource.create(),
+                    player.getX(), player.getY(), player.getZ()
+            );
+            mc.getSoundManager().play(wallSlideSoundInstance);
+        } else if (!isSliding && wasSliding && wallSlideSoundInstance != null) {
+            mc.getSoundManager().stop(wallSlideSoundInstance);
+            wallSlideSoundInstance = null;
+        }
+        wasSliding = isSliding;
+
+        if (isSliding) {
             // Freeze horizontal input — server controls position
             player.input.leftImpulse = 0;
             player.input.forwardImpulse = 0;

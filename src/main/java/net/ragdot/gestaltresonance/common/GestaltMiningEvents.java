@@ -11,6 +11,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.entity.living.LivingSwapItemsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
@@ -44,6 +45,21 @@ public class GestaltMiningEvents {
             return virtualToolFor(blockState, tier);
         } finally {
             computing.set(false);
+        }
+    }
+
+    /**
+     * Cancels the F-key offhand swap when the gestalt is summoned and the player's main
+     * hand slot is actually empty. Without this, getMainHandItem() returns the virtual
+     * tool via PlayerMainHandMixin and the swap deposits it as a real item in the offhand.
+     */
+    @SubscribeEvent
+    public void onSwapHandItems(LivingSwapItemsEvent.Hands event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned()) return;
+        if (player.getInventory().getSelected().isEmpty()) {
+            event.setCanceled(true);
         }
     }
 

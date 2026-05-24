@@ -8,6 +8,8 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,6 +29,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.GestaltDelayedPlacer;
 import net.ragdot.gestaltresonance.common.GestaltBlocks;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltDamageTypes;
@@ -171,7 +174,7 @@ public class PopPodEntity extends ThrowableProjectile {
                     placePopSprout(serverLevel, sproutPos, owner);
                 }
             }
-            case DOWN -> placePopDrip(serverLevel, hitPos.below());
+            case DOWN -> placePopDrip(serverLevel, hitPos.below(), owner);
             default   -> placePopVine(serverLevel, hitPos.relative(face), face.getOpposite());
         }
         discard();
@@ -186,38 +189,39 @@ public class PopPodEntity extends ThrowableProjectile {
     }
 
     private void placePopVine(ServerLevel level, BlockPos start, Direction facing) {
+        BlockState vineState = GestaltBlocks.POP_VINE.get().defaultBlockState().setValue(PopVineBlock.FACING, facing);
         for (int i = 0; i < 3; i++) {
             BlockPos vinePos = start.below(i);
             BlockState at = level.getBlockState(vinePos);
             if (!at.isAir() && !at.is(BlockTags.REPLACEABLE)) break;
-            if (!level.getBlockState(vinePos.relative(facing)).isSolid()) break;
-            if (!at.isAir()) level.removeBlock(vinePos, false);
-            level.setBlock(vinePos,
-                    GestaltBlocks.POP_VINE.get().defaultBlockState().setValue(PopVineBlock.FACING, facing),
-                    Block.UPDATE_ALL);
+            if (!level.getBlockState(vinePos.relative(facing)).isFaceSturdy(level, vinePos.relative(facing), facing.getOpposite())) break;
+            GestaltDelayedPlacer.schedule(level, vinePos, vineState, facing, (long) i * 10);
         }
     }
 
-    private void placePopDrip(ServerLevel level, BlockPos start) {
+    private void placePopDrip(ServerLevel level, BlockPos start, ServerPlayer owner) {
         List<BlockPos> toPlace = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
             BlockPos p = start.below(i);
             BlockState at = level.getBlockState(p);
             if (!at.isAir() && !at.is(BlockTags.REPLACEABLE)) break;
-            // Don't extend into lava/fire
             FluidState fs = level.getFluidState(p);
             if (fs.is(FluidTags.LAVA)) break;
             if (at.is(net.minecraft.world.level.block.Blocks.FIRE)
                     || at.is(net.minecraft.world.level.block.Blocks.SOUL_FIRE)) break;
             toPlace.add(p);
         }
+        int ownerLevel = owner.getData(net.ragdot.gestaltresonance.common.GestaltAttachments.PLAYER_GESTALT_STATE.get()).getGestaltLevel();
         for (int i = 0; i < toPlace.size(); i++) {
-            BlockPos p = toPlace.get(i);
-            if (!level.getBlockState(p).isAir()) level.removeBlock(p, false);
-            level.setBlock(p,
-                    GestaltBlocks.POP_DRIP.get().defaultBlockState()
-                            .setValue(PopDripBlock.END, i == toPlace.size() - 1),
-                    Block.UPDATE_ALL);
+            boolean isEnd = (i == toPlace.size() - 1);
+            BlockState state = GestaltBlocks.POP_DRIP.get().defaultBlockState()
+                    .setValue(PopDripBlock.END, isEnd);
+            if (isEnd) {
+                GestaltDelayedPlacer.scheduleWithOwner(level, toPlace.get(i), state, null,
+                        (long) i * 10, owner.getUUID(), ownerLevel);
+            } else {
+                GestaltDelayedPlacer.schedule(level, toPlace.get(i), state, null, (long) i * 10);
+            }
         }
     }
 
@@ -229,6 +233,7 @@ public class PopPodEntity extends ThrowableProjectile {
         if (level.getBlockEntity(pos) instanceof PopSproutBlockEntity be) {
             be.setOwner(owner.getUUID());
         }
+        level.playSound(null, pos, SoundEvents.BONE_MEAL_USE, SoundSource.BLOCKS, 1.0f, 0.9f + level.random.nextFloat() * 0.2f);
     }
 
     // ── Explosion helper ──────────────────────────────────────────────────────

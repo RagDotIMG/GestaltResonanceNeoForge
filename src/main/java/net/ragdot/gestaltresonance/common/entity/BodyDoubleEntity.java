@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -21,6 +22,7 @@ import java.util.List;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.common.NeoForge;
+import net.ragdot.gestaltresonance.common.GestaltAttachments;
 
 public class BodyDoubleEntity extends LivingEntity {
 
@@ -102,7 +104,7 @@ public class BodyDoubleEntity extends LivingEntity {
         if (level().isClientSide) return false;
         UUID ownerUuid = getOwnerUuid();
         if (ownerUuid != null) {
-            NeoForge.EVENT_BUS.post(new BodyDoubleHitEvent(ownerUuid, source, amount));
+            NeoForge.EVENT_BUS.post(new BodyDoubleHitEvent(ownerUuid, source, amount, level()));
         }
         return true;
     }
@@ -111,7 +113,7 @@ public class BodyDoubleEntity extends LivingEntity {
     public boolean isPushable() { return false; }
 
     @Override
-    public boolean isPushedByFluid() { return false; }
+    public boolean isPushedByFluid(net.neoforged.neoforge.fluids.FluidType type) { return false; }
 
     @Override
     public void knockback(double strength, double x, double z) {}
@@ -160,6 +162,20 @@ public class BodyDoubleEntity extends LivingEntity {
 
     @Override
     public boolean shouldDropExperience() { return false; }
+
+    /** Self-discard if the owner is no longer soul projecting — catches missed teardown paths. */
+    @Override
+    public void tick() {
+        super.tick();
+        if (level().isClientSide || tickCount % 20 != 0) return;
+        UUID ownerUuid = getOwnerUuid();
+        if (ownerUuid == null) { discard(); return; }
+        if (!(level() instanceof ServerLevel sl)) return;
+        ServerPlayer owner = sl.getServer().getPlayerList().getPlayer(ownerUuid);
+        if (owner == null || !owner.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get()).isSoulProjecting()) {
+            discard();
+        }
+    }
 
     /** Remove all body doubles owned by the given UUID from this level. */
     public static void dismissExistingDoubles(Level level, UUID ownerUuid) {

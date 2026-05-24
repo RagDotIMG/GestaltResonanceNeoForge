@@ -96,6 +96,9 @@ public class GestaltKeybinds {
     // True after sending StartGuardC2S; prevents spam before TriggerGuardS2C arrives.
     private static boolean guardInitiated = false;
 
+    // True after sending ToggleSummonC2S this key-press; reset when G is released.
+    private static boolean summonToggleSent = false;
+
     // Sneak+G chord state. We disambiguate tap (open management screen) from hold (XP channel)
     // using a 10-tick threshold. The 10 ticks are now client-side (windup happens here, not on server).
     private static final int CHANNEL_WINDUP_TICKS = 10;
@@ -135,14 +138,21 @@ public class GestaltKeybinds {
             sneakGHoldTicks = 0;
         }
 
+        // Reset summon-sent flag when G is fully released.
+        if (!gHeld) {
+            summonToggleSent = false;
+        }
+
         // Drain G clicks: priority order — exit projection > activate projection > toggle summon.
+        // ToggleSummonC2S is sent at most once per key press to prevent rapid summon/dismiss on hold.
         while (SUMMON_TOGGLE.get().consumeClick()) {
             if (state.isSoulProjecting()) {
                 PacketDistributor.sendToServer(new SoulProjectionExitC2S(SoulProjectionExitType.EMERGENCY.toByte()));
             } else if (state.isGuarding()) {
                 PacketDistributor.sendToServer(new SoulProjectionActivateC2S());
-            } else if (!sneakHeld) {
+            } else if (!sneakHeld && !summonToggleSent) {
                 PacketDistributor.sendToServer(new ToggleSummonC2S());
+                summonToggleSent = true;
             }
         }
         while (POWER_1.get().consumeClick()) {
@@ -152,10 +162,13 @@ public class GestaltKeybinds {
             // X+Guard: toggle Phase Out armed state.
             if (state.isGuarding()) {
                 PacketDistributor.sendToServer(new PhaseOutToggleC2S());
+            } else {
+                // X+Sneak (or bare X): server determines the modifier from sneak state.
+                PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_2.toByte()));
             }
         }
         while (POWER_3.get().consumeClick()) {
-            mc.player.displayClientMessage(Component.literal("[GestaltResonance] Power 3 pressed"), false);
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_3.toByte()));
         }
 
         // When right-click released: stop guard and reset the initiated flag
@@ -174,8 +187,11 @@ public class GestaltKeybinds {
         // Halt any in-progress block destruction while the gestalt owns left-click. Vanilla
         // continues an already-started destroy each tick from keyAttack.isDown(); cancelling the
         // initial press isn't enough if the user was already mining when the action started.
+        boolean suppressMining = GestaltAttackClientEvents.suppressBlockBreakThisTick;
+        GestaltAttackClientEvents.suppressBlockBreakThisTick = false;
         GestaltAction currentAction = state.getAction();
-        if (currentAction == GestaltAction.HIT_1
+        if (suppressMining
+                || currentAction == GestaltAction.HIT_1
                 || currentAction == GestaltAction.HIT_2
                 || currentAction == GestaltAction.HIT_3
                 || currentAction == GestaltAction.CHARGED_STRIKE_WINDUP

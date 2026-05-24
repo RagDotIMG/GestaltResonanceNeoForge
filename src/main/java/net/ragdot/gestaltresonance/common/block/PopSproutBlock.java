@@ -59,7 +59,7 @@ public class PopSproutBlock extends BushBlock implements EntityBlock {
 
     @Override
     protected boolean mayPlaceOn(BlockState state, BlockGetter level, BlockPos pos) {
-        return state.isSolid();
+        return state.isFaceSturdy(level, pos, net.minecraft.core.Direction.UP);
     }
 
     @Override

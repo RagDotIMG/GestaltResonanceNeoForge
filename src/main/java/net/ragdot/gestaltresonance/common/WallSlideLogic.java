@@ -2,6 +2,7 @@ package net.ragdot.gestaltresonance.common;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,11 +31,11 @@ import javax.annotation.Nullable;
 public class WallSlideLogic {
 
     private static final double DETECTION_RANGE    = 1.5;
-    private static final double INITIAL_SPEED      = 0.03;
-    private static final double MAX_SPEED          = 0.6;
-    private static final double CONSTANT_PHASE_END = 3.0;
-    private static final double ACCEL_END          = 15.0;
-    private static final double MAX_DISTANCE       = 16.0;
+    private static final double INITIAL_SPEED      = 0.07;
+    private static final double MAX_SPEED          = 0.8;
+    private static final double CONSTANT_PHASE_END = 2.5;
+    private static final double ACCEL_END          = 10.0;
+    private static final double MAX_DISTANCE       = 13.0;
 
     private static final Direction[] HORIZONTAL_DIRS = {
             Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
@@ -182,7 +183,7 @@ public class WallSlideLogic {
 
     private static boolean isSolid(Level level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
-        return !state.isAir() && !state.getCollisionShape(level, pos).isEmpty();
+        return !state.isAir() && !state.getCollisionShape(level, pos).isEmpty() && !state.is(BlockTags.CLIMBABLE);
     }
 
     /**

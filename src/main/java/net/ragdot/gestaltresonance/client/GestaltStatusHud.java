@@ -71,10 +71,9 @@ public class GestaltStatusHud {
 
         ResourceLocation sprite = SPRITE_AB;
 
-        // ── 1. No gestalt — unavailable ─────────────────────────────────────
+        // ── 1. No gestalt — hide entirely ───────────────────────────────────
         if (state.getGestaltId().equals(PlayerGestaltState.NONE)) {
             prevSummoned = false;
-            renderTinted(event.getGuiGraphics(), sprite, iconX, iconY, COLOR_UNAVAILABLE, 1.0f);
             return;
         }
 

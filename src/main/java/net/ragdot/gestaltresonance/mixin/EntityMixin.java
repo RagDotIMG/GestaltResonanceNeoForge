@@ -1,9 +1,11 @@
 package net.ragdot.gestaltresonance.mixin;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltIds;
+import net.ragdot.gestaltresonance.common.PhaseBlossomZoneTracker;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -22,6 +24,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(Entity.class)
 public abstract class EntityMixin {
+
+    @Inject(method = "isInWall", at = @At("HEAD"), cancellable = true)
+    private void gestaltresonance$suppressWallInPhaseZone(CallbackInfoReturnable<Boolean> cir) {
+        Entity self = (Entity)(Object)this;
+        BlockPos eyePos = BlockPos.containing(self.getEyePosition());
+        if (PhaseBlossomZoneTracker.isPhased(self.level(), eyePos)) {
+            cir.setReturnValue(false);
+        }
+    }
 
     @Inject(method = "isSteppingCarefully", at = @At("HEAD"), cancellable = true)
     private void gestaltresonance$isSteppingCarefully(CallbackInfoReturnable<Boolean> cir) {

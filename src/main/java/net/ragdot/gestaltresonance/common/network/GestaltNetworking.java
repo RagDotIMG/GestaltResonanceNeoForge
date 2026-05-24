@@ -266,10 +266,18 @@ public class GestaltNetworking {
                 // Block re-summon during crash cooldown or while hunger is still too low
                 if (!wasSummoned && state.isSummoned()) {
                     long currentTick = serverPlayer.getServer().getTickCount();
-                    if (state.hasCrashCooldown(currentTick) ||
-                            serverPlayer.getFoodData().getFoodLevel() <= GestaltCosts.CRASH_HUNGER_THRESHOLD) {
+                    if (state.hasCrashCooldown(currentTick)) {
                         state.setSummoned(false);
                         serverPlayer.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+                        serverPlayer.playNotifySound(GestaltSounds.GESTALT_FAIL.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+                        serverPlayer.displayClientMessage(
+                                net.minecraft.network.chat.Component.literal("Your gestalt is still recovering."), true);
+                        return;
+                    }
+                    if (serverPlayer.getFoodData().getFoodLevel() <= GestaltCosts.CRASH_HUNGER_THRESHOLD) {
+                        state.setSummoned(false);
+                        serverPlayer.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+                        serverPlayer.playNotifySound(GestaltSounds.GESTALT_FAIL.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
                         return;
                     }
                     // Amen Break cannot be summoned while a cat is within 4 blocks.
@@ -312,12 +320,19 @@ public class GestaltNetworking {
             Entity target = player.level().getEntity(packet.entityId());
             if (target instanceof Player targetPlayer) {
                 PlayerGestaltState state = targetPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+                boolean wasSummoned = state.isSummoned();
                 state.setSummoned(packet.summoned());
                 state.setGestaltId(packet.gestaltId());
                 targetPlayer.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+                if (wasSummoned && !packet.summoned() && onGestaltUnsummonCallback != null) {
+                    onGestaltUnsummonCallback.accept(targetPlayer.getUUID());
+                }
             }
         });
     }
+
+    /** Client-side callback invoked when any player's gestalt transitions from summoned to unsummoned. */
+    public static java.util.function.Consumer<java.util.UUID> onGestaltUnsummonCallback = null;
 
     // --- Ledge grab handlers ---
 
@@ -702,7 +717,12 @@ public class GestaltNetworking {
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer serverPlayer)) return;
             PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-            if (!state.isSoulProjecting()) return;
+            if (!state.isSoulProjecting()) {
+                // State already cleared (race condition): still clean up any orphaned body double.
+                net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity.dismissExistingDoubles(
+                        serverPlayer.level(), serverPlayer.getUUID());
+                return;
+            }
             // Client may request CLEAN or EMERGENCY; treat anything else as EMERGENCY for safety.
             SoulProjectionExitType requested = SoulProjectionExitType.fromByte(packet.exitType());
             SoulProjectionExitType allowed = (requested == SoulProjectionExitType.CLEAN)

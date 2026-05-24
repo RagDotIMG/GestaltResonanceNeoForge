@@ -44,6 +44,22 @@ public final class GestaltSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_LEVELUP =
             register("gestalt.levelup");
 
+    /** Plays when Amen Break's Phase Out (2G) activates. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_AB_2G =
+            register("gestalt.ab_2g");
+
+    /** Plays when each hit of the gestalt attack chain starts. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_HIT =
+            register("gestalt.hit");
+
+    /** Plays when a gestalt explosion detonates. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_EXPLOSION =
+            register("gestalt.explosion");
+
+    /** Plays when the player attaches to a wall slide. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_WALLSLIDE =
+            register("gestalt.wallslide");
+
     private static DeferredHolder<SoundEvent, SoundEvent> register(String name) {
         return SOUND_EVENTS.register(name, () ->
                 SoundEvent.createVariableRangeEvent(

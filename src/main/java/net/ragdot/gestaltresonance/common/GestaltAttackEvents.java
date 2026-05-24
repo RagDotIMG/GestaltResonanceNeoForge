@@ -79,6 +79,8 @@ public class GestaltAttackEvents {
         state.setAction(GestaltAction.HIT_1);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.HIT_1);
+        player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                GestaltSounds.GESTALT_HIT.get(), net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
     }
 
     /** Cancel any active chain for a player (e.g. on unsummon). Also cancels any charged strike. */
@@ -197,6 +199,8 @@ public class GestaltAttackEvents {
                     state.setAction(next);
                     player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
                     GestaltNetworking.syncAttackActionToTracking(player, next);
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            GestaltSounds.GESTALT_HIT.get(), net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
                     continue;
                 }
             }

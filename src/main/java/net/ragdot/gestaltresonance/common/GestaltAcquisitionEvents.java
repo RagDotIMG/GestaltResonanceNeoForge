@@ -1,8 +1,12 @@
 package net.ragdot.gestaltresonance.common;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -13,8 +17,14 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.neoforged.neoforge.event.AnvilUpdateEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.ragdot.gestaltresonance.GestaltResonance;
@@ -99,35 +109,96 @@ public class GestaltAcquisitionEvents {
 
 
     // ── Crying Obsidian brushing ──────────────────────────────
-    // Handled via PlayerInteractEvent.RightClickBlock as a proxy:
-    // when a player right-clicks Crying Obsidian with a Brush item,
-    // drop Nether Tear and convert to Obsidian.
+    // Mimics the vanilla BrushItem + BrushableBlockEntity mechanic:
+    //   • Right-click starts item-use (hold button = continuous brush)
+    //   • Every 10 ticks of use = one stroke; 10 strokes = complete
+    //   • Progress persists between sessions (per block pos)
+    //   • Releasing the button pauses without resetting progress
+
+    private static final Map<BlockPos, Integer> obsidianBrushProgress = new HashMap<>();
+    private static final Map<UUID, BlockPos>    activeBrusher          = new HashMap<>();
+    private static final int BRUSH_STROKE_INTERVAL = 10; // ticks, matches vanilla
+    private static final int BRUSH_STROKES_REQUIRED = 10;
+
     @SubscribeEvent
     public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        Level level = event.getLevel();
-        if (level.isClientSide()) return;
-
         Player player = event.getEntity();
         ItemStack held = player.getItemInHand(event.getHand());
-
-        // Check if holding a brush
         if (!held.is(Items.BRUSH)) return;
 
         BlockPos pos = event.getPos();
-        BlockState state = level.getBlockState(pos);
-        if (!state.is(Blocks.CRYING_OBSIDIAN)) return;
+        if (!event.getLevel().getBlockState(pos).is(Blocks.CRYING_OBSIDIAN)) return;
 
-        // Convert to obsidian
-        level.setBlock(pos, Blocks.OBSIDIAN.defaultBlockState(), 3);
-
-        // Drop nether tear
-        ItemStack tear = new ItemStack(GestaltResonance.NETHER_TEAR.get());
-        player.drop(tear, false);
-
-        // Damage brush
-        held.hurtAndBreak(1, player, LivingEntity.getSlotForHand(event.getHand()));
-
+        // Cancel vanilla behaviour on both sides and start item-use (brush animation).
         event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.CONSUME);
+        player.startUsingItem(event.getHand());
+
+        if (!event.getLevel().isClientSide()) {
+            activeBrusher.put(player.getUUID(), pos);
+        }
+    }
+
+    @SubscribeEvent
+    public void onBrushTick(LivingEntityUseItemEvent.Tick event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!event.getItem().is(Items.BRUSH)) return;
+
+        BlockPos pos = activeBrusher.get(player.getUUID());
+        if (pos == null) return;
+
+        Level level = player.level();
+        if (!level.getBlockState(pos).is(Blocks.CRYING_OBSIDIAN)) {
+            activeBrusher.remove(player.getUUID());
+            return;
+        }
+
+        // Vanilla fires a stroke every 10 ticks (at remaining % 10 == 0).
+        if (event.getDuration() % BRUSH_STROKE_INTERVAL != 0) return;
+
+        BlockState state = level.getBlockState(pos);
+
+        // Block-dust particles from crying obsidian
+        if (level instanceof ServerLevel sl) {
+            sl.sendParticles(
+                    new BlockParticleOption(ParticleTypes.BLOCK, state),
+                    pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5,
+                    7, 0.3, 0.1, 0.3, 0.05);
+        }
+        level.playSound(null, pos, SoundEvents.BRUSH_GENERIC,
+                SoundSource.BLOCKS, 1.0f, 0.8f + level.random.nextFloat() * 0.4f);
+
+        int strokes = obsidianBrushProgress.getOrDefault(pos, 0) + 1;
+
+        if (strokes >= BRUSH_STROKES_REQUIRED) {
+            // Brushing complete
+            obsidianBrushProgress.remove(pos);
+            activeBrusher.remove(player.getUUID());
+
+            level.setBlock(pos, Blocks.OBSIDIAN.defaultBlockState(), 3);
+
+            ItemEntity drop = new ItemEntity(level,
+                    pos.getX() + 0.5, pos.getY() + 1.1, pos.getZ() + 0.5,
+                    new ItemStack(GestaltResonance.NETHER_TEAR.get()));
+            drop.setPickUpDelay(10);
+            level.addFreshEntity(drop);
+
+            event.getItem().hurtAndBreak(1, player, LivingEntity.getSlotForHand(player.getUsedItemHand()));
+            player.stopUsingItem();
+
+            level.playSound(null, pos, SoundEvents.AMETHYST_BLOCK_CHIME,
+                    SoundSource.BLOCKS, 1.0f, 0.8f);
+        } else {
+            obsidianBrushProgress.put(pos, strokes);
+            event.getItem().hurtAndBreak(1, player, LivingEntity.getSlotForHand(player.getUsedItemHand()));
+        }
+    }
+
+    @SubscribeEvent
+    public void onBrushStop(LivingEntityUseItemEvent.Stop event) {
+        if (event.getEntity() instanceof Player player) {
+            activeBrusher.remove(player.getUUID());
+        }
     }
 
     // ── Anvil recipe: Resonant Powder + Amethyst Shard → Soul Vessel (Empty) ──
@@ -187,7 +258,9 @@ public class GestaltAcquisitionEvents {
         GestaltResonance.LOGGER.debug("[GestaltAcquisition] AWARD: player={} pendingGestaltType={}",
                 killer.getName().getString(), gestaltIdStr);
         killer.displayClientMessage(
-                Component.literal("The creature's essence flows into you... gestalt dormant. (" + gestaltIdStr + ")"),
+                Component.literal("The creature's essence flows into you... gestalt dormant. (")
+                        .append(Component.translatable("gestalt." + gestaltIdStr))
+                        .append(Component.literal(")")),
                 false
         );
     }

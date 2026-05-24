@@ -3,6 +3,7 @@ package net.ragdot.gestaltresonance.common;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.phys.AABB;
@@ -14,6 +15,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.ragdot.gestaltresonance.common.block.PopSproutBlock;
 import net.ragdot.gestaltresonance.common.block.PopSproutBlockEntity;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
+import net.ragdot.gestaltresonance.common.PhaseBlossomZoneTracker;
 import net.ragdot.gestaltresonance.common.PopSproutTracker;
 
 import java.util.ArrayDeque;
@@ -300,6 +302,16 @@ public class GestaltResonanceEvents {
             GestaltAcquisitionEvents.crashGestalt(player);
         }
         GestaltNetworking.syncResonanceToPlayer(player);
+    }
+
+    @SubscribeEvent
+    public void onSuppressPhaseZoneWall(LivingIncomingDamageEvent event) {
+        if (!event.getSource().is(DamageTypes.IN_WALL)) return;
+        LivingEntity entity = event.getEntity();
+        BlockPos eyePos = BlockPos.containing(entity.getEyePosition());
+        if (PhaseBlossomZoneTracker.isPhased(entity.level(), eyePos)) {
+            event.setCanceled(true);
+        }
     }
 
 }

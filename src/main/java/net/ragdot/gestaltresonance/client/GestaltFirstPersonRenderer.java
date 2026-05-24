@@ -18,6 +18,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.resources.ResourceLocation;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -58,15 +59,19 @@ public class GestaltFirstPersonRenderer {
 
     private static long windupStartGameTime = -1L;
 
-    private static GestaltModel model;
+    private static Map<ResourceLocation, GestaltModel> models = new HashMap<>();
 
-    public static void setModel(GestaltModel m) {
-        model = m;
+    public static void setModels(Map<ResourceLocation, GestaltModel> m) {
+        models = m;
     }
 
-    /** Exposed so the management screen can render the same model in a GUI context. May be null before player join. */
-    public static GestaltModel getModel() {
-        return model;
+    private static GestaltModel resolveModel(PlayerGestaltState state) {
+        return models.get(state.getGestaltId());
+    }
+
+    /** Exposed so the management screen can render the gestalt model for the given gestalt ID. May be null. */
+    public static GestaltModel getModel(ResourceLocation gestaltId) {
+        return models.get(gestaltId);
     }
 
     /**
@@ -86,7 +91,7 @@ public class GestaltFirstPersonRenderer {
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
-        if (model == null) return;
+        if (models.isEmpty()) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
@@ -113,11 +118,13 @@ public class GestaltFirstPersonRenderer {
             poseStackAll.translate(0.0, 1.5, 0.0);
             poseStackAll.scale(-1.0F, -1.0F, 1.0F);
 
+            GestaltModel throwModel = resolveModel(pState);
+            if (throwModel == null) { poseStackAll.popPose(); continue; }
             MultiBufferSource.BufferSource buf = mc.renderBuffers().bufferSource();
             VertexConsumer vc = buf.getBuffer(RenderType.entityTranslucent(GestaltPlayerLayer.textureFor(pState)));
             int lt = net.minecraft.client.renderer.LightTexture.pack(15, 15);
-            model.setupAnim(acp, 0, 0, acp.tickCount + partialTickAll, 0, 0);
-            model.renderToBuffer(poseStackAll, vc, lt, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
+            throwModel.setupAnim(acp, 0, 0, acp.tickCount + partialTickAll, 0, 0);
+            throwModel.renderToBuffer(poseStackAll, vc, lt, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
             buf.endBatch();
             poseStackAll.popPose();
         }
@@ -191,11 +198,13 @@ public class GestaltFirstPersonRenderer {
             poseStackAll.translate(0.0, 1.5, 0.0);
             poseStackAll.scale(-1.0F, -1.0F, 1.0F);
 
+            GestaltModel strikeModel = resolveModel(pState);
+            if (strikeModel == null) { poseStackAll.popPose(); continue; }
             MultiBufferSource.BufferSource buf = mc.renderBuffers().bufferSource();
             VertexConsumer vc = buf.getBuffer(RenderType.entityTranslucent(GestaltPlayerLayer.textureFor(pState)));
             int lt = net.minecraft.client.renderer.LightTexture.pack(15, 15);
-            model.setupAnim(acp, 0, 0, acp.tickCount + partialTickAll, 0, 0);
-            model.renderToBuffer(poseStackAll, vc, lt, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
+            strikeModel.setupAnim(acp, 0, 0, acp.tickCount + partialTickAll, 0, 0);
+            strikeModel.renderToBuffer(poseStackAll, vc, lt, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
             buf.endBatch();
             poseStackAll.popPose();
         }
@@ -348,12 +357,16 @@ public class GestaltFirstPersonRenderer {
         }
         poseStack.scale(-1.0F, -1.0F, 1.0F);
 
+        GestaltModel fpModel = resolveModel(state);
+        if (fpModel == null) { poseStack.popPose(); return; }
+
         MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
         VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.entityTranslucent(GestaltPlayerLayer.textureFor(state)));
 
         int light = net.minecraft.client.renderer.LightTexture.pack(15, 15);
-        model.setupAnim(player, 0, 0, player.tickCount + partialTick, 0, 0);
-        model.renderToBuffer(poseStack, vertexConsumer, light, OverlayTexture.NO_OVERLAY, 0xAAFFFFFF);
+        fpModel.skipIntroFor(player.getUUID());
+        fpModel.setupAnim(player, 0, 0, player.tickCount + partialTick, 0, 0);
+        fpModel.renderToBuffer(poseStack, vertexConsumer, light, OverlayTexture.NO_OVERLAY, 0xAAFFFFFF);
 
         bufferSource.endBatch();
         poseStack.popPose();

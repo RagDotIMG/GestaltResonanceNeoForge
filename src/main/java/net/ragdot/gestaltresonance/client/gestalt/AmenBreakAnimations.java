@@ -9,7 +9,7 @@ import net.minecraft.client.animation.KeyframeAnimations;
  * Made with Blockbench 5.0.7
  * Exported for Minecraft version 1.19 or later with Mojang mappings
  */
-public class AmenBreakAnimations {
+public final class AmenBreakAnimations {
 
     public static final AnimationDefinition INTRO = AnimationDefinition.Builder.withLength(1.25F)
         .addAnimation("Head", new AnimationChannel(AnimationChannel.Targets.ROTATION,

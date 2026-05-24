@@ -1,6 +1,5 @@
 {
   "itemGroup.gestaltresonance": "Gestalt Resonance",
-  "item.gestaltresonance.gestalt_shard": "Gestalt Shard",
   "item.gestaltresonance.nether_tear": "Nether Tear",
   "item.gestaltresonance.resonant_powder": "Resonant Powder",
   "item.gestaltresonance.soul_vessel_empty": "Soul Vessel (Empty)",
@@ -8,10 +7,12 @@
   "item.gestaltresonance.soul_vessel_fragile": "Soul Vessel (Fragile)",
 
   "entity.gestaltresonance.body_double": "Body Double",
-  "gestalt.gestaltresonance.spillways": "Spillways",
+  "entity.gestaltresonance.phase_mine": "Phase Mine",
+  "entity.gestaltresonance.phase_afterimage": "Phase Afterimage",
+  "entity.gestaltresonance.spawn_illusion": "Amen Break",
 
   "key.categories.gestaltresonance": "Gestalt Resonance",
-  "key.gestaltresonance.summon_toggle": "Summon/Desummon Gestalt",
+  "key.gestaltresonance.summon_toggle": "Summon/Dismiss Gestalt",
   "key.gestaltresonance.power_1": "Gestalt Power 1",
   "key.gestaltresonance.power_2": "Gestalt Power 2",
   "key.gestaltresonance.power_3": "Gestalt Power 3",
@@ -21,5 +22,11 @@
   "death.attack.gestalt": "%1$s was struck down by a Gestalt",
   "death.attack.gestalt.player": "%1$s was struck down by %2$s's Gestalt",
 
-  "gestalt.gestaltresonance.amen_break": "Amen Break"
+  "gestalt.gestaltresonance.amen_break": "Amen Break",
+  "gestalt.gestaltresonance.spillways": "Spillways",
+
+  "block.gestaltresonance.pop_sprout": "Pop Sprout",
+  "block.gestaltresonance.pop_pad": "Pop Pad",
+  "block.gestaltresonance.pop_vine": "Pop Vine",
+  "block.gestaltresonance.pop_drip": "Pop Dripper"
 }

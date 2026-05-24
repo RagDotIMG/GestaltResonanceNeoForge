@@ -44,7 +44,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
     /** Fallback texture if the gestalt has no skin definitions registered. */
     private static final ResourceLocation FALLBACK_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "textures/gestalt/amen_break.png");
+            ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "textures/gestalt/amen_break/default.png");
 
     /** Returns the texture to use for the given player's currently selected skin, with fallbacks. */
     public static ResourceLocation textureFor(PlayerGestaltState state) {
@@ -122,7 +122,12 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
     private static final float ATTACK_OFFSET_Z = -1.0F;
 
 
-    private final GestaltModel gestaltModel;
+    private final Map<ResourceLocation, GestaltModel> models;
+
+    private GestaltModel resolveModel(PlayerGestaltState state) {
+        GestaltModel m = models.get(state.getGestaltId());
+        return m != null ? m : models.values().iterator().next();
+    }
 
     /**
      * Call once per game tick per player. When the gestalt is idle, advances the smoothed body
@@ -158,9 +163,9 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
     public GestaltPlayerLayer(
             RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> renderer,
-            GestaltModel model) {
+            Map<ResourceLocation, GestaltModel> models) {
         super(renderer);
-        this.gestaltModel = model;
+        this.models = models;
     }
 
     @Override
@@ -197,7 +202,8 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         yOffset += shake[1];
         zOffset += shake[2];
 
-        gestaltModel.setupAnim(player, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
+        GestaltModel model = resolveModel(state);
+        model.setupAnim(player, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
 
         // The render layer is already in player-body-yaw-rotated space.
         // yawCorrection rotates from body-yaw space into the gestalt's target facing.
@@ -245,13 +251,13 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset, yOffset, zOffset);
-            renderGestaltModel(poseStack, vc, packedLight, 0.9f);
+            renderGestaltModel(poseStack, vc, packedLight, 0.9f, model);
             poseStack.popPose();
             return;
         }
 
         renderGestaltWithSummonVfx(poseStack, bufferSource, packedLight, player, partialTick,
-                progress, xOffset, yOffset, zOffset, yawCorrection, pitchCorrection);
+                progress, xOffset, yOffset, zOffset, yawCorrection, pitchCorrection, model);
     }
 
     /**
@@ -264,7 +270,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                                             int packedLight, AbstractClientPlayer player,
                                             float partialTick, float progress, float xOffset,
                                             float yOffset, float zOffset, float yawCorrection,
-                                            float pitchCorrection) {
+                                            float pitchCorrection, GestaltModel model) {
 
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         boolean crashing = state.isCrashingOut();
@@ -309,7 +315,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset + dx, yOffset + dy, zOffset + dz);
-            renderGestaltModel(poseStack, vertexConsumer, packedLight, alpha);
+            renderGestaltModel(poseStack, vertexConsumer, packedLight, alpha, model);
             poseStack.popPose();
         }
 
@@ -323,7 +329,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset, yOffset, zOffset);
-            renderGestaltModel(poseStack, vertexConsumer, packedLight, baseAlpha);
+            renderGestaltModel(poseStack, vertexConsumer, packedLight, baseAlpha, model);
             poseStack.popPose();
         }
     }
@@ -361,10 +367,10 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
     }
 
     private void renderGestaltModel(PoseStack poseStack, VertexConsumer vertexConsumer,
-                                    int packedLight, float alpha) {
+                                    int packedLight, float alpha, GestaltModel model) {
         int a = Mth.clamp((int) (alpha * 255.0f), 0, 255);
         if (a <= 0) return;
         int color = (a << 24) | 0x00FFFFFF;  // ARGB: alpha + white
-        gestaltModel.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY, color);
+        model.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY, color);
     }
 }

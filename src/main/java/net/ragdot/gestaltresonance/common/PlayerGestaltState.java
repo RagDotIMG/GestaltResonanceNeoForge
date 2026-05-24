@@ -6,6 +6,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
+import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
+import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -152,8 +154,8 @@ public class PlayerGestaltState {
     private boolean ghostState = false;
 
     // --- Power activation state (transient, not serialized) ---
-    /** Absolute server tick at which the shared power cooldown expires. */
-    private long powerCooldownUntilTick = 0L;
+    /** Per-power cooldown: indexed by slot.ordinal() * 3 + modifier.ordinal() (3 slots × 3 modifiers = 9). */
+    private final long[] perPowerCooldowns = new long[9];
     /** Server tick when the current power windup began; -1 = not winding up. */
     private long powerWindupStartTick = -1L;
 
@@ -428,9 +430,12 @@ public class PlayerGestaltState {
     public boolean hasPhaseOutCooldown() { return phaseOutCooldownTicks > 0; }
 
     // --- Power state accessors ---
-    public long getPowerCooldownUntilTick() { return powerCooldownUntilTick; }
-    public void setPowerCooldownUntilTick(long t) { powerCooldownUntilTick = t; }
-    public boolean hasPowerCooldown(long currentTick) { return currentTick < powerCooldownUntilTick; }
+    public boolean hasPowerCooldown(GestaltPowerSlot slot, GestaltPowerModifier mod, long tick) {
+        return tick < perPowerCooldowns[slot.ordinal() * 3 + mod.ordinal()];
+    }
+    public void setPowerCooldown(GestaltPowerSlot slot, GestaltPowerModifier mod, long until) {
+        perPowerCooldowns[slot.ordinal() * 3 + mod.ordinal()] = until;
+    }
 
     public long getPowerWindupStartTick() { return powerWindupStartTick; }
     public void setPowerWindupStartTick(long t) { powerWindupStartTick = t; }
@@ -692,7 +697,7 @@ public class PlayerGestaltState {
         c.phaseOutActive = this.phaseOutActive;
         c.phaseOutTicksRemaining = this.phaseOutTicksRemaining;
         c.phaseOutCooldownTicks = this.phaseOutCooldownTicks;
-        c.powerCooldownUntilTick = this.powerCooldownUntilTick;
+        System.arraycopy(this.perPowerCooldowns, 0, c.perPowerCooldowns, 0, 9);
         c.powerWindupStartTick = this.powerWindupStartTick;
         c.markedEntityId = this.markedEntityId;
         c.markedEntityTicksRemaining = this.markedEntityTicksRemaining;

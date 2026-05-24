@@ -70,6 +70,28 @@ public class PopSproutTracker extends SavedData {
         setDirty();
     }
 
+    /**
+     * Returns the most-recently-added pop sprout (across all players) that still
+     * exists in the world within {@code radius} blocks of {@code center}.
+     * Iterates each player's list newest-first and returns the first valid match.
+     */
+    @javax.annotation.Nullable
+    public BlockPos findNewestInRange(ServerLevel level, net.minecraft.world.phys.Vec3 center, double radius) {
+        double rSq = radius * radius;
+        ResourceKey<Level> dim = level.dimension();
+        for (LinkedList<DimPos> list : sprouts.values()) {
+            var it = list.descendingIterator();
+            while (it.hasNext()) {
+                DimPos dp = it.next();
+                if (!dp.dim().equals(dim)) continue;
+                if (dp.pos().distToCenterSqr(center.x, center.y, center.z) > rSq) continue;
+                if (!(level.getBlockState(dp.pos()).getBlock() instanceof PopSproutBlock)) continue;
+                return dp.pos();
+            }
+        }
+        return null;
+    }
+
     /** Remove a sprout from tracking (called when it detonates or is broken). */
     public void removeSprout(UUID playerUuid, BlockPos pos) {
         LinkedList<DimPos> list = sprouts.get(playerUuid);

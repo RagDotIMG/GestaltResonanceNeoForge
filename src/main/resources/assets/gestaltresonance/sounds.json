@@ -29,6 +29,22 @@
   },
   "gestalt.levelup": {
     "subtitle": "subtitles.gestaltresonance.gestalt.levelup",
-    "sounds": [ "gestaltresonance:gestalt/gestalt_levelup" ]
+    "sounds": [ "gestaltresonance:gestalt/lvlup" ]
+  },
+  "gestalt.ab_2g": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.ab_2g",
+    "sounds": [ "gestaltresonance:gestalt/ab_2g" ]
+  },
+  "gestalt.hit": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.hit",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_hit" ]
+  },
+  "gestalt.explosion": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.explosion",
+    "sounds": [ "gestaltresonance:gestalt/gestalt_explosion" ]
+  },
+  "gestalt.wallslide": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.wallslide",
+    "sounds": [ "gestaltresonance:gestalt/wallslide" ]
   }
 }

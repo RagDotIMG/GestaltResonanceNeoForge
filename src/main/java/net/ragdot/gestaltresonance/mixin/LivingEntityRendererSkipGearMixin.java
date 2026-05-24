@@ -30,6 +30,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererSkipGearMixin {
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Redirect(method = "render",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/entity/layers/RenderLayer;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILnet/minecraft/world/entity/Entity;FFFFFF)V"))
@@ -45,7 +46,6 @@ public abstract class LivingEntityRendererSkipGearMixin {
             }
         }
         // Fall through to the original render call
-        @SuppressWarnings({"rawtypes", "unchecked"})
         RenderLayer raw = layer;
         raw.render(pose, buf, light, entity, f1, f2, f3, f4, f5, f6);
     }

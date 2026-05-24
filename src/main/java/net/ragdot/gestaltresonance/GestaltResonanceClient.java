@@ -1,20 +1,30 @@
 package net.ragdot.gestaltresonance;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.ragdot.gestaltresonance.common.item.SoulVesselEmptyItem;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
+import net.ragdot.gestaltresonance.client.entity.GestaltExplosionParticle;
+import net.ragdot.gestaltresonance.client.entity.GestaltIllusionParticle;
+import net.ragdot.gestaltresonance.client.entity.PhaseBlossomRenderer;
+import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.ragdot.gestaltresonance.client.GestaltCooldownHud;
 import net.ragdot.gestaltresonance.client.GestaltStatusHud;
@@ -22,14 +32,21 @@ import net.ragdot.gestaltresonance.client.GestaltKeybinds;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientInput;
 import net.ragdot.gestaltresonance.client.entity.BodyDoubleRenderer;
+import net.ragdot.gestaltresonance.client.entity.PhaseAfterimageRenderer;
+import net.ragdot.gestaltresonance.client.entity.PhaseMineModel;
+import net.ragdot.gestaltresonance.client.entity.PhaseMineRenderer;
 import net.ragdot.gestaltresonance.common.GestaltEntities;
 import net.ragdot.gestaltresonance.client.GestaltResonanceHud;
 import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltXpOverlay;
+import net.ragdot.gestaltresonance.client.entity.DripDropRenderer;
 import net.ragdot.gestaltresonance.client.entity.PopPodRenderer;
 import net.ragdot.gestaltresonance.client.entity.PrimedBlockRenderer;
+import net.ragdot.gestaltresonance.client.entity.SpawnIllusionRenderer;
 import net.ragdot.gestaltresonance.client.gestalt.AmenBreakModel;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
+import net.ragdot.gestaltresonance.client.gestalt.SpillwaysModel;
+import net.ragdot.gestaltresonance.common.GestaltIds;
 import net.ragdot.gestaltresonance.client.GestaltPlayerLayer;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
@@ -47,15 +64,21 @@ public class GestaltResonanceClient {
         modEventBus.addListener(GestaltResonanceClient::registerLayerDefinitions);
         modEventBus.addListener(GestaltResonanceClient::addPlayerLayers);
         modEventBus.addListener(GestaltResonanceClient::registerEntityRenderers);
+        modEventBus.addListener(GestaltResonanceClient::registerParticles);
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
         GestaltResonance.LOGGER.info("GestaltResonance client setup");
+        event.enqueueWork(() -> ItemProperties.register(
+                GestaltResonance.SOUL_VESSEL_EMPTY.get(),
+                ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "filled"),
+                (stack, level, entity, seed) -> SoulVesselEmptyItem.hasStoredGestalt(stack) ? 1.0f : 0.0f));
         NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onClientTick);
         NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onInteractionKeyMappingTriggered);
         NeoForge.EVENT_BUS.addListener(GestaltKeybinds::onLivingJump);
         NeoForge.EVENT_BUS.addListener(GestaltFirstPersonRenderer::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceClient::onClientLevelTick);
+        NeoForge.EVENT_BUS.addListener(GestaltResonanceClient::onEntityLeaveLevel);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceClient::onMovementInput);
         NeoForge.EVENT_BUS.addListener(GestaltXpOverlay::onRenderGuiLayer);
         NeoForge.EVENT_BUS.addListener(GestaltCooldownHud::onRenderGuiLayer);
@@ -73,6 +96,10 @@ public class GestaltResonanceClient {
         // Bridge: when the network handler observes a chain transition, reset the
         // client-side animation state directly. Avoids the IDLE-skip race condition.
         GestaltNetworking.onChainTransitionCallback = GestaltModel::notifyChainEnd;
+
+        // Bridge: when a gestalt transitions to unsummoned, reset animation state so
+        // the next summon triggers a fresh intro (setupAnim isn't called while invisible).
+        GestaltNetworking.onGestaltUnsummonCallback = GestaltModel::notifyUnsummon;
 
         // Bridge: fall break impact packet → gestalt shake VFX.
         GestaltNetworking.onFallBreakImpactCallback = uuid -> {
@@ -151,21 +178,43 @@ public class GestaltResonanceClient {
         event.registerEntityRenderer(GestaltEntities.BODY_DOUBLE.get(), BodyDoubleRenderer::new);
         event.registerEntityRenderer(GestaltEntities.PRIMED_BLOCK.get(), PrimedBlockRenderer::new);
         event.registerEntityRenderer(GestaltEntities.POP_POD.get(), PopPodRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.DRIP_DROP.get(), DripDropRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.PHASE_MINE.get(), PhaseMineRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.PHASE_AFTERIMAGE.get(), PhaseAfterimageRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.SPAWN_ILLUSION.get(), SpawnIllusionRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.PHASE_BLOSSOM.get(), PhaseBlossomRenderer::new);
+    }
+
+    private static void registerParticles(RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(GestaltParticles.GESTALT_ILLUSION.get(), GestaltIllusionParticle.Provider::new);
+        event.registerSpriteSet(GestaltParticles.GESTALT_EXPLOSION.get(), GestaltExplosionParticle.Provider::new);
     }
 
     private static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
         event.registerLayerDefinition(AmenBreakModel.LAYER, AmenBreakModel::createBodyLayer);
+        event.registerLayerDefinition(SpillwaysModel.LAYER, SpillwaysModel::createBodyLayer);
+        event.registerLayerDefinition(PhaseMineModel.LAYER, PhaseMineModel::createBodyLayer);
     }
 
     private static void addPlayerLayers(EntityRenderersEvent.AddLayers event) {
         for (PlayerSkin.Model skin : event.getSkins()) {
             var renderer = event.getSkin(skin);
             if (renderer instanceof PlayerRenderer playerRenderer) {
-                AmenBreakModel model = new AmenBreakModel(event.getEntityModels().bakeLayer(AmenBreakModel.LAYER));
-                playerRenderer.addLayer(new GestaltPlayerLayer(playerRenderer, model));
-                // Share the model instance with the first-person renderer
-                GestaltFirstPersonRenderer.setModel(model);
+                AmenBreakModel amenBreakModel = new AmenBreakModel(event.getEntityModels().bakeLayer(AmenBreakModel.LAYER));
+                SpillwaysModel spillwaysModel = new SpillwaysModel(event.getEntityModels().bakeLayer(SpillwaysModel.LAYER));
+                java.util.Map<ResourceLocation, GestaltModel> models = java.util.Map.of(
+                        GestaltIds.AMEN_BREAK, amenBreakModel,
+                        GestaltIds.SPILLWAYS, spillwaysModel
+                );
+                playerRenderer.addLayer(new GestaltPlayerLayer(playerRenderer, models));
+                GestaltFirstPersonRenderer.setModels(models);
             }
+        }
+    }
+
+    private static void onEntityLeaveLevel(EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide() && event.getEntity() instanceof AbstractClientPlayer player) {
+            GestaltModel.removePlayer(player.getUUID());
         }
     }
 

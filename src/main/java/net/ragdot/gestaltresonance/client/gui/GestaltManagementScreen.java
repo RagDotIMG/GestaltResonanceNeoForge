@@ -20,6 +20,7 @@ import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
+import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
@@ -42,11 +43,6 @@ public class GestaltManagementScreen extends Screen {
     private static final int PANEL_WIDTH = 256;
     private static final int PANEL_HEIGHT = 200;
 
-    private static final int[][] POWER_LEVELS = {
-            {0, 2, 3},
-            {5, 7, 8},
-            {10, 12, 13}
-    };
     private static final String[] POWER_COLS = {"B", "S", "G"};
 
     private final PlayerGestaltState state;
@@ -55,7 +51,7 @@ public class GestaltManagementScreen extends Screen {
     private float displayYaw = 0f;
 
     private GestaltManagementScreen(PlayerGestaltState state) {
-        super(Component.literal("Gestalt"));
+        super(Component.translatable("gestalt." + state.getGestaltId().getNamespace() + "." + state.getGestaltId().getPath()));
         this.state = state;
         this.availableSkins = collectAvailable(state);
         this.currentIndex = indexOfSelected(state, availableSkins);
@@ -211,7 +207,7 @@ public class GestaltManagementScreen extends Screen {
 
             for (int c = 0; c < 3; c++) {
                 int cx = x + 18 + c * (cell + gap);
-                int required = POWER_LEVELS[r][c];
+                int required = GestaltCosts.POWER_LEVELS[r][c];
                 boolean unlocked = state.getGestaltLevel() >= required;
                 int fill = unlocked ? 0xFF555555 : 0xFF1A1A1A;
                 int border = unlocked ? 0xFFAAAAAA : 0xFF444444;
@@ -233,7 +229,7 @@ public class GestaltManagementScreen extends Screen {
     }
 
     private void renderGestaltPreview(GuiGraphics g, int cx, int cy, float partialTick) {
-        GestaltModel model = GestaltFirstPersonRenderer.getModel();
+        GestaltModel model = GestaltFirstPersonRenderer.getModel(state.getGestaltId());
         Minecraft mc = Minecraft.getInstance();
         if (model == null || mc.player == null) return;
 

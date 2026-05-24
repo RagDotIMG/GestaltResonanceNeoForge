@@ -40,9 +40,6 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
     /** Optional — return null if this gestalt doesn't support throwing. */
     @Nullable protected AnimationDefinition throwAnimation() { return null; }
 
-    /** Optional — return null if this gestalt doesn't support a hit reaction. */
-    @Nullable protected AnimationDefinition hitAnimation() { return null; }
-
     /** Optional — return null if this gestalt doesn't support a ledge grab pose. */
     @Nullable protected AnimationDefinition grabAnimation() { return null; }
 
@@ -78,11 +75,58 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
      * client never observes the IDLE state in {@link #setupAnim} (race condition
      * where IDLE and a fresh HIT_1 packet are processed in the same tick).
      */
+    public static void removePlayer(UUID playerUuid) {
+        perPlayer.remove(playerUuid);
+    }
+
     public static void notifyChainEnd(UUID playerUuid) {
         AnimData data = perPlayer.get(playerUuid);
         if (data == null) return;
         if (data.hitState.isStarted()) data.hitState.stop();
         data.prevHitAction = GestaltAction.IDLE;
+    }
+
+    /**
+     * Prevent the intro animation from firing for a player in the current/next {@link #setupAnim}
+     * call. Used by the first-person renderer, where the intro should never play.
+     */
+    public void skipIntroFor(UUID playerId) {
+        AnimData data = perPlayer.computeIfAbsent(playerId, k -> {
+            AnimData d = new AnimData();
+            d.wasSummoned = true;
+            return d;
+        });
+        data.wasSummoned = true;
+        if (data.introState.isStarted()) data.introState.stop();
+        data.introStartedAt = -1.0F;
+    }
+
+    /**
+     * Reset all animation state for a player whose gestalt just became unsummoned.
+     * Called via callback when the client receives a summoned→false state sync, so
+     * the next summon's rising-edge check fires correctly even though setupAnim is
+     * not called while the gestalt is invisible.
+     */
+    public static void notifyUnsummon(UUID playerUuid) {
+        AnimData data = perPlayer.get(playerUuid);
+        if (data == null) return;
+        data.wasSummoned = false;
+        data.introStartedAt = -1.0F;
+        data.introState.stop();
+        data.hitState.stop();
+        data.prevHitAction = GestaltAction.IDLE;
+        data.grabState.stop();
+        data.miningState.stop();
+        data.guardState.stop();
+        data.throwState.stop();
+        data.swimState.stop();
+        data.windupState.stop();
+        data.power1GState.stop();
+        data.wasMining = false;
+        data.wasGuarding = false;
+        data.wasThrowing = false;
+        data.wasSwimming = false;
+        data.wasLedgeGrabbing = false;
     }
 
     @Override
@@ -100,18 +144,125 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
             perPlayer.put(player.getUUID(), data);
         }
 
-        // Rising edge of summoned → kick off a fresh intro
+        // ── Phase 1: cache animation definitions and compute all flags ───────
+
+        AnimationDefinition intro      = introAnimation();
+        AnimationDefinition grabAnim   = grabAnimation();
+        AnimationDefinition power1GAnim = power1GAnimation();
+        AnimationDefinition windupAnim = windupAnimation();
+        AnimationDefinition miningAnim = miningAnimation();
+        AnimationDefinition guardAnim  = guardAnimation();
+        AnimationDefinition throwAnim  = throwAnimation();
+        AnimationDefinition swimAnim   = swimAnimation();
+
+        GestaltAction action = state.getAction();
+        boolean isHitAction  = action == GestaltAction.HIT_1
+                            || action == GestaltAction.HIT_2
+                            || action == GestaltAction.HIT_3;
+        AnimationDefinition hitAnim = isHitAction ? getHitAnimation(action) : null;
+
+        boolean ledgeGrabbing = state.isLedgeGrabbing();
+        boolean guarding      = action == GestaltAction.GUARD;
+        boolean throwing      = action == GestaltAction.THROW;
+        boolean swimming      = player.isSwimming();
+        boolean mining        = miningAnim != null && isMining(player);
+        boolean power1GActive = action == GestaltAction.POWER_1G_WINDUP;
+        boolean winding       = action == GestaltAction.CHARGED_STRIKE_WINDUP
+                             || action == GestaltAction.CHARGED_STRIKE_TRAVEL;
+
+        float introLenTicks = intro.lengthInSeconds() * 20.0F;
+
+        // ── Phase 2: start/stop every state unconditionally before any return ─
+        // This ensures was* flags and AnimationState objects are always current,
+        // regardless of which rendering path exits early below.
+
+        // Intro — rising edge on summon; interrupted by hit chain
         if (summoned && !data.wasSummoned) {
             data.introState.start((int) ageInTicks);
             data.introStartedAt = ageInTicks;
         }
         data.wasSummoned = summoned;
-
-        AnimationDefinition intro = introAnimation();
-        float introLenTicks = intro.lengthInSeconds() * 20.0F;
         boolean introActive = data.introState.isStarted()
                 && data.introStartedAt >= 0
                 && (ageInTicks - data.introStartedAt) < introLenTicks;
+        if (introActive && isHitAction) {
+            data.introState.stop();
+            introActive = false;
+        } else if (!introActive && data.introState.isStarted()) {
+            data.introState.stop();
+        }
+
+        // Ledge grab
+        if (ledgeGrabbing && grabAnim != null && !data.grabState.isStarted()) {
+            data.grabState.start((int) ageInTicks);
+        } else if (!ledgeGrabbing && data.wasLedgeGrabbing && data.grabState.isStarted()) {
+            data.grabState.stop();
+        }
+        data.wasLedgeGrabbing = ledgeGrabbing;
+
+        // Hit chain
+        if (isHitAction && hitAnim != null) {
+            if (action != data.prevHitAction) {
+                data.hitState.stop();
+                data.hitState.start((int) ageInTicks);
+            }
+            data.prevHitAction = action;
+        } else if (data.prevHitAction != GestaltAction.IDLE) {
+            data.hitState.stop();
+            data.prevHitAction = GestaltAction.IDLE;
+        }
+
+        // 1G power
+        if (power1GActive && power1GAnim != null) {
+            if (!data.power1GState.isStarted()) data.power1GState.start((int) ageInTicks);
+        } else if (!power1GActive && data.power1GState.isStarted()) {
+            data.power1GState.stop();
+        }
+
+        // Charged-strike windup (held through travel phase)
+        if (winding && windupAnim != null) {
+            if (!data.windupState.isStarted()) data.windupState.start((int) ageInTicks);
+        } else if (!winding && data.windupState.isStarted()) {
+            data.windupState.stop();
+        }
+
+        // Idle — always ticking for phase continuity across transitions
+        if (!data.idleState.isStarted()) data.idleState.start(0);
+        data.idleState.updateTime(ageInTicks, 1.0F);
+
+        // Mining
+        if (mining && !data.wasMining) {
+            data.miningState.start((int) ageInTicks);
+        } else if (!mining && data.wasMining && data.miningState.isStarted()) {
+            data.miningState.stop();
+        }
+        data.wasMining = mining;
+
+        // Guard
+        if (guarding && !data.wasGuarding && guardAnim != null) {
+            data.guardState.start((int) ageInTicks);
+        } else if (!guarding && data.wasGuarding && data.guardState.isStarted()) {
+            data.guardState.stop();
+        }
+        data.wasGuarding = guarding;
+
+        // Throw
+        if (throwing && !data.wasThrowing && throwAnim != null) {
+            data.throwState.start((int) ageInTicks);
+        } else if (!throwing && data.wasThrowing && data.throwState.isStarted()) {
+            data.throwState.stop();
+        }
+        data.wasThrowing = throwing;
+
+        // Swim
+        if (swimming && !data.wasSwimming && swimAnim != null) {
+            data.swimState.start((int) ageInTicks);
+        } else if (!swimming && data.wasSwimming && data.swimState.isStarted()) {
+            data.swimState.stop();
+        }
+        data.wasSwimming = swimming;
+
+        // ── Phase 3: render — highest priority wins (early returns are safe now) ─
 
         if (introActive) {
             data.introState.updateTime(ageInTicks, 1.0F);
@@ -119,134 +270,32 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
             return;
         }
 
-        if (data.introState.isStarted()) {
-            data.introState.stop();
-        }
-
-        // Ledge grab: static pose overrides everything except intro
-        boolean ledgeGrabbing = state.isLedgeGrabbing();
-        AnimationDefinition grabAnim = grabAnimation();
         if (ledgeGrabbing && grabAnim != null) {
-            if (!data.grabState.isStarted()) {
-                data.grabState.start((int) ageInTicks);
-            }
             data.grabState.updateTime(ageInTicks, 1.0F);
             this.animate(data.grabState, grabAnim, ageInTicks);
-            data.wasLedgeGrabbing = true;
             return;
         }
-        if (data.wasLedgeGrabbing && data.grabState.isStarted()) {
-            data.grabState.stop();
-        }
-        data.wasLedgeGrabbing = ledgeGrabbing;
 
-        // Hit chain: plays whichever hit animation matches the current action
-        GestaltAction hitAction = state.getAction();
-        boolean isHitAction = hitAction == GestaltAction.HIT_1
-                || hitAction == GestaltAction.HIT_2
-                || hitAction == GestaltAction.HIT_3;
-        if (isHitAction) {
-            AnimationDefinition hitAnim = getHitAnimation(hitAction);
-            if (hitAnim != null) {
-                if (hitAction != data.prevHitAction) {
-                    data.hitState.stop();
-                    data.hitState.start((int) ageInTicks);
-                }
-                data.prevHitAction = hitAction;
-                data.hitState.updateTime(ageInTicks, 1.0F);
-                this.animate(data.hitState, hitAnim, ageInTicks);
-                return;
-            }
-        }
-        if (!isHitAction && data.prevHitAction != GestaltAction.IDLE) {
-            data.hitState.stop();
-            data.prevHitAction = GestaltAction.IDLE;
+        if (isHitAction && hitAnim != null) {
+            data.hitState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.hitState, hitAnim, ageInTicks);
+            return;
         }
 
-        // 1G power windup
-        AnimationDefinition power1GAnim = power1GAnimation();
-        boolean power1GActive = state.getAction() == GestaltAction.POWER_1G_WINDUP;
         if (power1GActive && power1GAnim != null) {
-            if (!data.power1GState.isStarted()) {
-                data.power1GState.start((int) ageInTicks);
-            }
             data.power1GState.updateTime(ageInTicks, 1.0F);
             this.animate(data.power1GState, power1GAnim, ageInTicks);
             return;
         }
-        if (!power1GActive && data.power1GState.isStarted()) {
-            data.power1GState.stop();
-        }
 
-        // Charged-strike windup pose, also held during the travel phase so the gestalt
-        // doesn't drop into idle while flying toward the target.
-        AnimationDefinition windupAnim = windupAnimation();
-        boolean winding = state.getAction() == GestaltAction.CHARGED_STRIKE_WINDUP
-                || state.getAction() == GestaltAction.CHARGED_STRIKE_TRAVEL;
         if (winding && windupAnim != null) {
-            if (!data.windupState.isStarted()) {
-                data.windupState.start((int) ageInTicks);
-            }
             data.windupState.updateTime(ageInTicks, 1.0F);
             this.animate(data.windupState, windupAnim, ageInTicks);
             return;
         }
-        if (!winding && data.windupState.isStarted()) {
-            data.windupState.stop();
-        }
-
-        // Idle always progresses for phase continuity across transitions
-        if (!data.idleState.isStarted()) {
-            data.idleState.start(0);
-        }
-        data.idleState.updateTime(ageInTicks, 1.0F);
-
-        // Mining
-        AnimationDefinition miningAnim = miningAnimation();
-        boolean mining = miningAnim != null && isMining(player);
-        if (mining && !data.wasMining) {
-            data.miningState.start((int) ageInTicks);
-        }
-        if (!mining && data.wasMining && data.miningState.isStarted()) {
-            data.miningState.stop();
-        }
-        data.wasMining = mining;
-
-        // Guard
-        boolean guarding = state.getAction() == GestaltAction.GUARD;
-        AnimationDefinition guardAnim = guardAnimation();
-        if (guarding && !data.wasGuarding && guardAnim != null) {
-            data.guardState.start((int) ageInTicks);
-        }
-        if (!guarding && data.wasGuarding) {
-            data.guardState.stop();
-        }
-        data.wasGuarding = guarding;
-
-        // Throw
-        boolean throwing = state.getAction() == GestaltAction.THROW;
-        AnimationDefinition throwAnim = throwAnimation();
-        if (throwing && !data.wasThrowing && throwAnim != null) {
-            data.throwState.start((int) ageInTicks);
-        }
-        if (!throwing && data.wasThrowing && data.throwState.isStarted()) {
-            data.throwState.stop();
-        }
-        data.wasThrowing = throwing;
-
-        // Swim
-        boolean swimming = player.isSwimming();
-        AnimationDefinition swimAnim = swimAnimation();
-        if (swimming && !data.wasSwimming && swimAnim != null) {
-            data.swimState.start((int) ageInTicks);
-        }
-        if (!swimming && data.wasSwimming && data.swimState.isStarted()) {
-            data.swimState.stop();
-        }
-        data.wasSwimming = swimming;
 
         // Play: mining > throw > guard > swim > idle
-        if (mining) {
+        if (mining && data.miningState.isStarted()) {
             data.miningState.updateTime(ageInTicks, 1.0F);
             this.animate(data.miningState, miningAnim, ageInTicks);
         } else if (throwing && throwAnim != null && data.throwState.isStarted()) {

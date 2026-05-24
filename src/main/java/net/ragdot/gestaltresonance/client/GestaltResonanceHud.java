@@ -87,7 +87,7 @@ public class GestaltResonanceHud {
             } else if (idle < FADE_DELAY_TICKS + FADE_DURATION_TICKS) {
                 alpha = 1.0f - (float)(idle - FADE_DELAY_TICKS) / FADE_DURATION_TICKS;
             } else {
-                return; // fully faded out
+                alpha = 0f; // bar fully faded — indicator may still render if armed
             }
         }
 
@@ -98,88 +98,78 @@ public class GestaltResonanceHud {
         int resSeg   = maxRes / GestaltCosts.RESONANCE_SEGMENT_SIZE;
         int totalSeg = disSeg + resSeg;
 
-        if (totalSeg == 0) return;
+        if (totalSeg == 0 && !phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0) return;
 
         int barWidth     = totalSeg * SEGMENT_PX;
         int barY         = mc.getWindow().getGuiScaledHeight() - 56;
         int equilibriumX = BAR_X + disSeg * SEGMENT_PX;
 
         var graphics = event.getGuiGraphics();
+        boolean barFaded = (alpha == 0f);
 
-        // 1px white border (4 lines, no fill)
-        int borderColor = withAlpha(COLOR_EQUILIBRIUM, alpha);
-        graphics.fill(BAR_X - 1, barY - 1, BAR_X + barWidth + 1, barY,                   borderColor); // top
-        graphics.fill(BAR_X - 1, barY + BAR_HEIGHT, BAR_X + barWidth + 1, barY + BAR_HEIGHT + 1, borderColor); // bottom
-        graphics.fill(BAR_X - 1, barY - 1, BAR_X,                         barY + BAR_HEIGHT + 1, borderColor); // left
-        graphics.fill(BAR_X + barWidth, barY - 1, BAR_X + barWidth + 1,   barY + BAR_HEIGHT + 1, borderColor); // right
+        if (!barFaded) {
+            // 1px white border (4 lines, no fill)
+            int borderColor = withAlpha(COLOR_EQUILIBRIUM, alpha);
+            graphics.fill(BAR_X - 1, barY - 1, BAR_X + barWidth + 1, barY,                   borderColor); // top
+            graphics.fill(BAR_X - 1, barY + BAR_HEIGHT, BAR_X + barWidth + 1, barY + BAR_HEIGHT + 1, borderColor); // bottom
+            graphics.fill(BAR_X - 1, barY - 1, BAR_X,                         barY + BAR_HEIGHT + 1, borderColor); // left
+            graphics.fill(BAR_X + barWidth, barY - 1, BAR_X + barWidth + 1,   barY + BAR_HEIGHT + 1, borderColor); // right
 
-        // Fill: resonance side (right of equilibrium)
-        if (value > 0) {
-            int fillPx = Math.min(Math.round((float) value / maxRes * resSeg * SEGMENT_PX), resSeg * SEGMENT_PX);
-            if (fillPx > 0)
-                graphics.fill(equilibriumX, barY, equilibriumX + fillPx, barY + BAR_HEIGHT, withAlpha(COLOR_RESONANCE, alpha));
-        }
+            // Fill: resonance side (right of equilibrium)
+            if (value > 0) {
+                int fillPx = Math.min(Math.round((float) value / maxRes * resSeg * SEGMENT_PX), resSeg * SEGMENT_PX);
+                if (fillPx > 0)
+                    graphics.fill(equilibriumX, barY, equilibriumX + fillPx, barY + BAR_HEIGHT, withAlpha(COLOR_RESONANCE, alpha));
+            }
 
-        // Fill: dissonance side (left of equilibrium)
-        if (value < 0) {
-            int fillPx = Math.min(Math.round((float) -value / maxDis * disSeg * SEGMENT_PX), disSeg * SEGMENT_PX);
-            if (fillPx > 0)
-                graphics.fill(equilibriumX - fillPx, barY, equilibriumX, barY + BAR_HEIGHT, withAlpha(COLOR_DISSONANCE, alpha));
-        }
+            // Fill: dissonance side (left of equilibrium)
+            if (value < 0) {
+                int fillPx = Math.min(Math.round((float) -value / maxDis * disSeg * SEGMENT_PX), disSeg * SEGMENT_PX);
+                if (fillPx > 0)
+                    graphics.fill(equilibriumX - fillPx, barY, equilibriumX, barY + BAR_HEIGHT, withAlpha(COLOR_DISSONANCE, alpha));
+            }
 
-        // Segment dividers
-        for (int i = 1; i < totalSeg; i++) {
-            int divX = BAR_X + i * SEGMENT_PX;
-            if (divX == equilibriumX) {
-                graphics.fill(divX, barY - 0, divX + 3, barY + BAR_HEIGHT + 0, withAlpha(COLOR_EQUILIBRIUM, alpha));
-            } else {
-                graphics.fill(divX, barY, divX + 1, barY + BAR_HEIGHT, withAlpha(COLOR_DIVIDER, alpha));
+            // Segment dividers
+            for (int i = 1; i < totalSeg; i++) {
+                int divX = BAR_X + i * SEGMENT_PX;
+                if (divX == equilibriumX) {
+                    graphics.fill(divX, barY, divX + 3, barY + BAR_HEIGHT, withAlpha(COLOR_EQUILIBRIUM, alpha));
+                } else {
+                    graphics.fill(divX, barY, divX + 1, barY + BAR_HEIGHT, withAlpha(COLOR_DIVIDER, alpha));
+                }
             }
         }
 
-        // Phase Out indicator: small square to the right of the resonance bar.
-        drawPhaseOutIndicator(graphics, BAR_X + barWidth + 4, barY - 1, alpha);
+        // Phase Out indicator: always render when armed/active/cooldown, full alpha when armed.
+        drawPhaseOutIndicator(graphics, BAR_X + barWidth + 4, barY - 1);
     }
 
-    // Phase Out indicator constants
-    private static final int PO_INNER_W = 5;
-    private static final int PO_INNER_H = 7;
-    private static final int PO_COLOR_ARMED  = 0xFFFFFFFF; // white
-    private static final int PO_COLOR_OFF    = 0xFF666666; // grey
+    // Phase Out indicator constants — square 5×5 inner area
+    private static final int PO_SIZE       = 5;
+    private static final int PO_COLOR_ARMED = 0xFFFFFFFF; // white
+    private static final int PO_COLOR_OFF   = 0xFF666666; // grey
 
-    private static void drawPhaseOutIndicator(net.minecraft.client.gui.GuiGraphics g,
-                                               int x, int y, float alpha) {
-        // Only show when there is something to communicate (armed, active, or on cooldown)
+    private static void drawPhaseOutIndicator(net.minecraft.client.gui.GuiGraphics g, int x, int y) {
         if (!phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0) return;
 
-        int borderColor = withAlpha(COLOR_EQUILIBRIUM, alpha);
-        int outerW = PO_INNER_W + 2;
-        int outerH = PO_INNER_H + 2;
-        int ix = x + 1; // inner top-left X
-        int iy = y + 1; // inner top-left Y
-
-        // Outer 1px border
-        g.fill(x, y, x + outerW, y + 1,             borderColor); // top
-        g.fill(x, y + outerH - 1, x + outerW, y + outerH, borderColor); // bottom
-        g.fill(x, y, x + 1, y + outerH,             borderColor); // left
-        g.fill(x + outerW - 1, y, x + outerW, y + outerH, borderColor); // right
-
-        // Inner fill
+        // Armed/active → full alpha; cooldown → dim grey/white, no border
         if (phaseOutCooldown > 0) {
-            // Cooldown: grey background, white fills from bottom as cooldown elapses
-            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_OFF, alpha));
+            // No border during cooldown; fill at x,y directly
+            g.fill(x, y, x + PO_SIZE, y + PO_SIZE, PO_COLOR_OFF);
             float fraction = 1f - (float) phaseOutCooldown / GestaltCosts.PHASE_OUT_COOLDOWN_TICKS;
-            int fillH = Math.round(fraction * PO_INNER_H);
+            int fillH = Math.round(fraction * PO_SIZE);
             if (fillH > 0) {
-                int fillY = iy + PO_INNER_H - fillH;
-                g.fill(ix, fillY, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_ARMED, alpha));
+                g.fill(x, y + PO_SIZE - fillH, x + PO_SIZE, y + PO_SIZE, PO_COLOR_ARMED);
             }
-        } else if (phaseOutArmed || phaseOutActive) {
-            // Armed or ghost window active: solid white
-            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_ARMED, alpha));
         } else {
-            // Off (no cooldown, not armed): solid grey
-            g.fill(ix, iy, ix + PO_INNER_W, iy + PO_INNER_H, withAlpha(PO_COLOR_OFF, alpha));
+            // Armed or active: 1px white border + solid white fill
+            int bx = x - 1; int by = y - 1;
+            int bx2 = x + PO_SIZE + 1; int by2 = y + PO_SIZE + 1;
+            g.fill(bx, by,  bx2, by + 1,  COLOR_EQUILIBRIUM); // top
+            g.fill(bx, by2 - 1, bx2, by2, COLOR_EQUILIBRIUM); // bottom
+            g.fill(bx, by,  bx + 1, by2,  COLOR_EQUILIBRIUM); // left
+            g.fill(bx2 - 1, by, bx2, by2, COLOR_EQUILIBRIUM); // right
+            g.fill(x, y, x + PO_SIZE, y + PO_SIZE, PO_COLOR_ARMED);
         }
     }
 

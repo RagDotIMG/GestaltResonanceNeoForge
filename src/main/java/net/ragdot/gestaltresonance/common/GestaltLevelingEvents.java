@@ -53,11 +53,11 @@ public class GestaltLevelingEvents {
         PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isAwakened()) return;
 
-        int currentXp = state.getGestaltXp();
-        int penalty = (int) (currentXp * 0.05f);
+        int totalXp = state.getTotalGestaltXp();
+        int penalty = (int) (totalXp * 0.10f);
         if (penalty <= 0) return;
 
-        state.setGestaltXp(currentXp - penalty);
+        state.spendGestaltXp(penalty);
         serverPlayer.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncGestaltXpToPlayer(serverPlayer);
     }

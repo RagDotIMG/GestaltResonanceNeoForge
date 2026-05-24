@@ -1,5 +1,9 @@
 package net.ragdot.gestaltresonance.common;
 
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import java.util.Set;
+
 /**
  * Central registry of all hunger/exhaustion costs for Gestalt actions.
  * Tune every drain number here; no other file should define raw exhaustion values.
@@ -83,19 +87,56 @@ public final class GestaltCosts {
      *  snaps back to IDLE at the end so it doesn't linger on the target. */
     public static final int CHARGED_STRIKE_HIT3_DURATION_TICKS = 13;
 
+    // ── PopDrip scan ─────────────────────────────────────────────────────────
+
+    /** Ticks between hostile mob scans on an active PopDrip END block. */
+    public static final int POPDRIP_SCAN_INTERVAL = 60;
+
+    /** Base number of DripDrop projectiles before the vine despawns. */
+    public static final int POPDRIP_BASE_DROPS = 3;
+
+    /** Gestalt levels required per additional drop (+1 drop every N levels). */
+    public static final int POPDRIP_BONUS_LEVEL_INTERVAL = 3;
+
+    /** Base explosion radius for a DripDrop impact. */
+    public static final float POPDRIP_EXPLOSION_BASE_RADIUS = 2.0f;
+
+    /** Base explosion damage for a DripDrop impact. */
+    public static final float POPDRIP_EXPLOSION_BASE_DAMAGE = 2.5f;
+
+    /** Total drops available = 3 + floor(level / 3). Level 1–2 → 3, level 15 → 8. */
+    public static int popdripMaxDrops(int gestaltLevel) {
+        return POPDRIP_BASE_DROPS + (gestaltLevel / POPDRIP_BONUS_LEVEL_INTERVAL);
+    }
+
+    // ── Amen Break Phase Shifter (Power 2B) ──────────────────────────────────
+
+    public static final int   ILLUSION_SPAWN_COST            = 20;
+    public static final int   ILLUSION_TELEPORT_COST         = 10;
+    public static final int   ILLUSION_LIFETIME              = 200;
+    public static final int   ILLUSION_FADE_START            = 150;
+    public static final int   ILLUSION_FADE_DURATION         = 40;
+    public static final float ILLUSION_BASE_OPACITY          = 0.75f;
+    public static final float ILLUSION_FADE_OPACITY          = 0.2f;
+    public static final int   ILLUSION_COOLDOWN              = 600;
+    public static final int   ILLUSION_TELEPORT_GHOST_TICKS  = 5;
+    public static final int   ILLUSION_POPSPROUT_SCAN_RADIUS = 16;
+    public static final float ILLUSION_EXPLOSION_BASE_RADIUS = 2.5f;
+    public static final float ILLUSION_EXPLOSION_BASE_DAMAGE = 4.0f;
+
     /** Eye-to-block-center reach for gestalt mining: 3.5 + gestalt's RNG stat. */
     public static double mineRangeFor(PlayerGestaltState state) {
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         return 3.5 + (stats != null ? stats.range() : 0);
     }
 
-    // ── Amen Break Power 1G (delayed-explosion strike) ───────────────────────
+    // ── Amen Break Queen Killer (Power 1G) ───────────────────────────────────
 
     /** Length of the windup animation before the hit lands. */
     public static final int POWER_1G_ANIMATION_TICKS = 40;
 
     /** Multiplier applied to the standard hit damage formula on a successful Power 1G hit. */
-    public static final float POWER_1G_DAMAGE_MULTIPLIER = 3.0f;
+    public static final float POWER_1G_DAMAGE_MULTIPLIER = 1.5f;
 
     /** Ticks between a successful hit and the delayed explosion. */
     public static final int POWER_1G_EXPLOSION_DELAY = 50;
@@ -103,22 +144,43 @@ public final class GestaltCosts {
     /** Cooldown applied at activation; prevents overlapping marks. */
     public static final int POWER_1G_COOLDOWN_TICKS = 55;
 
+    /**
+     * Minimum gestalt level required to use each power/modifier combination.
+     * Row = power slot (0=POWER_1, 1=POWER_2, 2=POWER_3).
+     * Col = modifier (0=B/NONE, 1=S/SNEAK, 2=G/GUARD).
+     */
+    public static final int[][] POWER_LEVELS = {
+            {0, 2, 3},
+            {5, 7, 8},
+            {10, 12, 13}
+    };
+
     /** Gestalt XP cost paid at activation. Refused if insufficient. */
-    public static final int POWER_1G_XP_COST = 20;
+    public static final int POWER_1G_XP_COST = 15;
 
     /** Player exhaustion paid at activation. */
     public static final float POWER_1G_EXHAUSTION = 2.0f;
 
     /** Base explosion radius — scaled by gestalt level via {@code GestaltExplosionUtil.scaledRadius}. */
-    public static final float POWER_1G_EXPLOSION_BASE_RADIUS = 2.5f;
+    public static final float POWER_1G_EXPLOSION_BASE_RADIUS = 1.5f;
 
     /** Base explosion damage — scaled by gestalt level via {@code GestaltExplosionUtil.scaledDamage}. */
-    public static final float POWER_1G_EXPLOSION_BASE_DAMAGE = 4.0f;
+    public static final float POWER_1G_EXPLOSION_BASE_DAMAGE = 5.5f;
 
-    // ── Amen Break Power 1S (Primed Block) ───────────────────────────────────
+    // ── Amen Break Block Breaker (Power 1S) ──────────────────────────────────
 
     /** Gestalt XP cost paid at activation. Refused if insufficient. */
-    public static final int POWER_1S_XP_COST = 30;
+    public static final int POWER_1S_XP_COST = 40;
+
+    /** Reduced cost when a catalyst item is held at activation. */
+    public static final int POWER_1S_REDUCED_XP_COST = 10;
+
+    /** Items consumed on activation to trigger the reduced-cost path. */
+    public static final Set<Item> POWER_1S_CATALYSTS = Set.of(
+            Items.FLINT,
+            Items.COAL,
+            Items.GUNPOWDER
+    );
 
     /** Ticks the primed block entity stays active before detonating. */
     public static final int POWER_1S_FUSE_TICKS = 80;
@@ -129,7 +191,7 @@ public final class GestaltCosts {
     /** Cooldown applied at activation. */
     public static final int POWER_1S_COOLDOWN = 55;
 
-    // ── Pop Pod Power 1B (botanical projectile) ──────────────────────────────
+    // ── Amen Break Jungle Bomber (Power 1B) ──────────────────────────────────
 
     /** Gestalt XP cost paid at activation. */
     public static final int POWER_1B_XP_COST = 1;
@@ -138,32 +200,85 @@ public final class GestaltCosts {
     public static final float POWER_1B_EXHAUSTION = 1.0f;
 
     /** Cooldown applied at activation. */
-    public static final int POWER_1B_COOLDOWN_TICKS = 40;
+    public static final int POWER_1B_COOLDOWN_TICKS = 20;
 
     /** Base explosion radius for pop blocks — scaled by gestalt level. */
     public static final float POWER_1B_EXPLOSION_BASE_RADIUS = 2.0f;
 
     /** Base explosion damage for pop blocks — scaled by gestalt level. */
-    public static final float POWER_1B_EXPLOSION_BASE_DAMAGE = 3.0f;
+    public static final float POWER_1B_EXPLOSION_BASE_DAMAGE = 4.0f;
 
     /** Distance (blocks) within which a PopSprout triggers on a nearby mob. */
     public static final double POP_SPROUT_TRIGGER_DISTANCE = 2.5;
 
+    // ── Amen Break Phase Mine (Power 2S) ─────────────────────────────────────
+
+    /** Gestalt XP cost paid at activation. */
+    public static final int POWER_2S_XP_COST = 20;
+
+    /** Raytrace reach for mine placement (blocks). */
+    public static final double POWER_2S_RANGE = 3.5;
+
+    /** Gestalt level at which a second Phase Mine becomes available. */
+    public static final int POWER_2S_EXTRA_MINE_LEVEL = 12;
+
+    /** Max concurrent Phase Mines based on current gestalt level. */
+    public static int phaseMineLimit(int gestaltLevel) {
+        return gestaltLevel >= POWER_2S_EXTRA_MINE_LEVEL ? 2 : 1;
+    }
+
+    // ── Phase Mine behavior ──────────────────────────────────────────────────────
+
+    /** Ticks the marking phase lasts before drag-back begins. */
+    public static final int PHASE_MINE_MARK_DURATION = 80;
+
+    /** Ticks between each position snapshot during marking (snapshots at tick 0/20/40/60). */
+    public static final int PHASE_MINE_SNAPSHOT_INTERVAL = 20;
+
+    /** Total position snapshots taken during marking. */
+    public static final int PHASE_MINE_SNAPSHOT_COUNT = 4;
+
+    /** Speed (blocks/tick) at which the marked entity is dragged toward each snapshot. */
+    public static final double PHASE_MINE_DRAGBACK_SPEED = 0.4;
+
+    /** Distance (blocks) within which a snapshot waypoint is considered reached. */
+    public static final double PHASE_MINE_CONTACT_RADIUS = 0.75;
+
+    /** Damage multiplier applied to each afterimage explosion relative to the scaled base. */
+    public static final float PHASE_MINE_EXPLOSION_DAMAGE_MULTIPLIER = 0.5f;
+
+    /** Base explosion radius for each afterimage contact, before level scaling. */
+    public static final float PHASE_MINE_EXPLOSION_BASE_RADIUS = 2.5f;
+
+    /** Base explosion damage for each afterimage contact, before level scaling and multiplier. */
+    public static final float PHASE_MINE_EXPLOSION_BASE_DAMAGE = 4.0f;
+
     // ── Amen Break Phase Out (Power 2G) ──────────────────────────────────────
 
     /** Total resonance + gestaltXP cost to trigger Phase Out. */
-    public static final int PHASE_OUT_COST_TOTAL = 25;
+    public static final int PHASE_OUT_COST_TOTAL = 15;
 
     /** Duration of the ghost window in ticks (3 seconds). */
     public static final int PHASE_OUT_GHOST_TICKS = 60;
 
-    /** Cooldown after the ghost window ends, in ticks (2 minutes). */
-    public static final int PHASE_OUT_COOLDOWN_TICKS = 2400;
+    /** Cooldown after the ghost window ends, in ticks . */
+    public static final int PHASE_OUT_COOLDOWN_TICKS = 2020;
+
+    // ── Spillways Power 1B (water manipulation) ──────────────────────────────
+
+    /** Gestalt XP cost paid at activation. */
+    public static final int SPILLWAYS_WATER_XP_COST = 10;
+
+    /** Cooldown applied at activation, in ticks. */
+    public static final int SPILLWAYS_WATER_COOLDOWN_TICKS = 20;
+
+    /** Raytrace reach for water manipulation (blocks). */
+    public static final int SPILLWAYS_WATER_RANGE = 7;
 
     // ── Soul projection ──────────────────────────────────────────────────────
 
     /** Cooldown after a CLEAN exit (right-click own body double). */
-    public static final int SOUL_PROJECTION_COOLDOWN_CLEAN_TICKS = 400;
+    public static final int SOUL_PROJECTION_COOLDOWN_CLEAN_TICKS = 200;
 
     /** Cooldown after a non-clean exit (EMERGENCY / FORCED / CRASH). */
     public static final int SOUL_PROJECTION_COOLDOWN_HARD_TICKS = 800;
@@ -178,13 +293,13 @@ public final class GestaltCosts {
     public static final float DEFAULT_FLY_SPEED = 0.05f;
 
     /** Fixed damage dealt on EMERGENCY exit; clamped above 0 HP server-side. */
-    public static final float SOUL_PROJECTION_EMERGENCY_DAMAGE = 4.0f;
+    public static final float SOUL_PROJECTION_EMERGENCY_DAMAGE = 3.0f;
 
     /** Multiplier applied to the body double's incoming damage on FORCED exit. */
-    public static final float SOUL_PROJECTION_FORCED_DAMAGE_MULTIPLIER = 2.0f;
+    public static final float SOUL_PROJECTION_FORCED_DAMAGE_MULTIPLIER = 3.0f;
 
     /** Damage dealt to the player on hunger CRASH exit. */
-    public static final float SOUL_PROJECTION_CRASH_DAMAGE = 6.0f;
+    public static final float SOUL_PROJECTION_CRASH_DAMAGE = 5.0f;
 
     /**
      * Max soul projection range in blocks: 2 + RNG, with a +1 bonus at RNG 5.
@@ -193,7 +308,7 @@ public final class GestaltCosts {
     public static double soulProjectionRangeFor(PlayerGestaltState state) {
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         int range = (stats != null) ? stats.range() : 0;
-        return 2 + range + (range == 5 ? 1 : 0);
+        return 4 + range + (range == 5 ? 1 : 0);
     }
 
     // ── Resonance system ─────────────────────────────────────────────────────
@@ -224,8 +339,8 @@ public final class GestaltCosts {
     /** Health (half-hearts * 2) below which the chain finisher bonus activates: 4 hearts = 8 health. */
     public static final float GAIN_CHAIN_FINISHER_HP_THRESHOLD = 8.0f;
     public static final int GAIN_PARRY                       = 7;
-    public static final int GAIN_PARRY_WINDOW_MIN            = 3;
-    public static final int GAIN_PARRY_WINDOW_MAX            = 5;
+    public static final int GAIN_PARRY_WINDOW_MIN            = 2;
+    public static final int GAIN_PARRY_WINDOW_MAX            = 6;
     public static final int GAIN_XP_CHANNEL                  = 2;
     public static final int GAIN_XP_CHANNEL_THRESHOLD        = 5;
 
@@ -279,6 +394,17 @@ public final class GestaltCosts {
             default -> RESONANCE_TIER_MULTIPLIER[1];
         };
     }
+
+    // ── Amen Break Phase Blossom (Power 3B) ──────────────────────────────────
+
+    /** Gestalt XP cost paid at activation (spawn path). */
+    public static final int PHASE_BLOSSOM_XP_COST = 30;
+
+    /** Cooldown applied after dismissing the blossom. */
+    public static final int PHASE_BLOSSOM_COOLDOWN_TICKS = 40;
+
+    /** Raycast range for placing the blossom. */
+    public static final double PHASE_BLOSSOM_PLACE_RANGE = 3.5;
 
     private GestaltCosts() {}
 }

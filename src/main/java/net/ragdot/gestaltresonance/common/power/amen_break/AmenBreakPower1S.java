@@ -23,6 +23,7 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 
+import net.minecraft.world.item.ItemStack;
 import java.util.Set;
 
 public final class AmenBreakPower1S {
@@ -122,32 +123,41 @@ public final class AmenBreakPower1S {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
         if (!state.isSummoned()) {
-            GestaltResonance.LOGGER.debug("Power1S {}: not summoned", player.getName().getString());
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: not summoned", player.getName().getString());
             playFail(player);
             return;
         }
         if (!state.isAwakened()) {
-            GestaltResonance.LOGGER.debug("Power1S {}: not awakened", player.getName().getString());
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: not awakened", player.getName().getString());
+            playFail(player);
+            return;
+        }
+        if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[0][1]) {
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: level too low ({})", player.getName().getString(), state.getGestaltLevel());
             playFail(player);
             return;
         }
 
         long currentTick = player.getServer().getTickCount();
-        if (state.hasPowerCooldown(currentTick)) {
-            GestaltResonance.LOGGER.debug("Power1S {}: on cooldown", player.getName().getString());
+        if (state.hasPowerCooldown(KEY.slot(), KEY.modifier(), currentTick)) {
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: on cooldown", player.getName().getString());
             playFail(player);
             return;
         }
-        if (state.getTotalGestaltXp() < GestaltCosts.POWER_1S_XP_COST) {
-            GestaltResonance.LOGGER.debug("Power1S {}: insufficient XP (total {} < {})",
-                    player.getName().getString(), state.getTotalGestaltXp(), GestaltCosts.POWER_1S_XP_COST);
+        ItemStack heldItem = player.getMainHandItem();
+        boolean hasCatalyst = !heldItem.isEmpty() && GestaltCosts.POWER_1S_CATALYSTS.contains(heldItem.getItem());
+        int xpCost = hasCatalyst ? GestaltCosts.POWER_1S_REDUCED_XP_COST : GestaltCosts.POWER_1S_XP_COST;
+
+        if (state.getTotalGestaltXp() < xpCost) {
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: insufficient XP (total {} < {})",
+                    player.getName().getString(), state.getTotalGestaltXp(), xpCost);
             playFail(player);
             return;
         }
 
         HitResult hit = player.pick(4.5, 0.0f, false);
         if (hit.getType() != HitResult.Type.BLOCK) {
-            GestaltResonance.LOGGER.debug("Power1S {}: not targeting a block", player.getName().getString());
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: not targeting a block", player.getName().getString());
             playFail(player);
             return;
         }
@@ -155,15 +165,16 @@ public final class AmenBreakPower1S {
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         BlockState blockState = player.level().getBlockState(pos);
         if (!isPrimeable(blockState)) {
-            GestaltResonance.LOGGER.debug("Power1S {}: block {} not primeable",
+            GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: block {} not primeable",
                     player.getName().getString(), blockState.getBlock().getDescriptionId());
             playFail(player);
             return;
         }
 
         // Deduct costs (may de-level if within-level XP is insufficient)
-        state.spendGestaltXp(GestaltCosts.POWER_1S_XP_COST);
-        state.setPowerCooldownUntilTick(currentTick + GestaltCosts.POWER_1S_COOLDOWN);
+        if (hasCatalyst) heldItem.shrink(1);
+        state.spendGestaltXp(xpCost);
+        state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.POWER_1S_COOLDOWN);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1S_COOLDOWN);
@@ -181,7 +192,7 @@ public final class AmenBreakPower1S {
                 net.minecraft.sounds.SoundEvents.TNT_PRIMED, net.minecraft.sounds.SoundSource.BLOCKS,
                 1.0F, 1.0F);
 
-        GestaltResonance.LOGGER.debug("Power1S {}: primed {} at {}",
-                player.getName().getString(), blockState.getBlock().getDescriptionId(), pos);
+        GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: primed {} at {} (catalyst={})",
+                player.getName().getString(), blockState.getBlock().getDescriptionId(), pos, hasCatalyst);
     }
 }

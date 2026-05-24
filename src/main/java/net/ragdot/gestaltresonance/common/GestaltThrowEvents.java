@@ -7,6 +7,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingFallEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
@@ -36,11 +37,15 @@ public class GestaltThrowEvents {
     private static final int THROW_DURATION_TICKS = 8;
     private static final float THROW_EXHAUSTION = 3.0f;
 
-    // Throw fall-damage reduction: subtract a flat distance, then scale remaining damage.
-    private static final float FALL_DISTANCE_REDUCTION = 8.5f;
-    private static final float FALL_DAMAGE_MULTIPLIER = 0.5f;
+    // Throw fall-damage reduction: extend safe-fall threshold by 2 blocks (vanilla 3 → 5).
+    private static final float FALL_DISTANCE_REDUCTION = 2.0f;
 
     private static final Map<UUID, Integer> throwTimerMap = new HashMap<>();
+    // Tick when the player last threw. Protection is valid for THROW_PROTECTION_TICKS after the throw.
+    // Timestamp window avoids the cleanup-loop timing hazards of the previous Set approach.
+    private static final Map<UUID, Long> throwProtectionTickMap = new HashMap<>();
+    // Max throw arc is ~25 ticks; 100 gives generous margin with no false positives.
+    private static final long THROW_PROTECTION_TICKS = 100L;
 
     // -------------------------------------------------------------------------
     // Public API called from GestaltNetworking
@@ -89,9 +94,11 @@ public class GestaltThrowEvents {
 
         // --- Start throw action ---
         state.setAction(GestaltAction.THROW);
-        state.setThrowFallProtection(true);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        throwProtectionTickMap.put(player.getUUID(), (long) player.getServer().getTickCount());
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.THROW);
+        player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.SNOWBALL_THROW, SoundSource.PLAYERS, 0.5f, 1.0f);
 
         throwTimerMap.put(player.getUUID(), THROW_DURATION_TICKS);
     }
@@ -99,6 +106,7 @@ public class GestaltThrowEvents {
     /** Cancel a pending throw timer (e.g. on unsummon). */
     public static void cancelThrow(ServerPlayer player) {
         UUID uuid = player.getUUID();
+        throwProtectionTickMap.remove(uuid);
         if (throwTimerMap.remove(uuid) != null) {
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (state.getAction() == GestaltAction.THROW) {
@@ -134,43 +142,33 @@ public class GestaltThrowEvents {
             return false;
         });
 
-        // Clear throw fall protection once the player has landed. We wait for the throw
-        // timer to expire first so we don't clear during the same tick the throw started
-        // (the post-jump MovePlayerPacket can arrive a tick later, leaving player.onGround()
-        // momentarily true after we've already armed the flag).
-        for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
-            if (!player.onGround()) continue;
-            if (throwTimerMap.containsKey(player.getUUID())) continue;
-            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-            if (state.hasThrowFallProtection()) {
-                state.setThrowFallProtection(false);
-                player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
-            }
-        }
+        // Purge expired throw-protection timestamps (safety net for disconnects without cancelThrow).
+        long currentTick = event.getServer().getTickCount();
+        throwProtectionTickMap.entrySet().removeIf(e -> currentTick - e.getValue() > THROW_PROTECTION_TICKS);
     }
 
-    /**
-     * While the throw fall protection flag is set, raise the damage threshold and scale
-     * down the remaining damage. Vanilla computes damage as (distance - 3) * multiplier;
-     * we trim the distance and apply our own multiplier on top.
-     */
     @SubscribeEvent
     public void onLivingFall(LivingFallEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
-        if (state.hasThrowFallProtection()) {
-            // Throw landing: generous protection (set in handleThrowInput).
+        boolean hasThrowProtection = false;
+        if (player instanceof ServerPlayer sp2) {
+            Long throwTick = throwProtectionTickMap.get(sp2.getUUID());
+            hasThrowProtection = throwTick != null
+                    && sp2.getServer().getTickCount() - throwTick <= THROW_PROTECTION_TICKS;
+        }
+
+        // Step 1: throw protection — subtract 2 blocks from effective fall distance.
+        if (hasThrowProtection) {
+            throwProtectionTickMap.remove(((ServerPlayer) player).getUUID());
             event.setDistance(Math.max(0f, event.getDistance() - FALL_DISTANCE_REDUCTION));
-            event.setDamageMultiplier(event.getDamageMultiplier() * FALL_DAMAGE_MULTIPLIER);
-            if (player instanceof ServerPlayer sp) {
-                applyFallBreakKill(sp, event);
-                GestaltNetworking.broadcastFallBreakImpact(sp);
-                sp.playNotifySound(GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
-            }
-        } else if (state.isSummoned() && state.isGuarding()
-                && event.getDistance() >= GestaltCosts.FALL_BREAK_MIN_DISTANCE) {
-            // Active fall break: player must be guarding on impact for the gestalt to cushion the fall.
+        }
+
+        // Step 2: fall break — applied independently, uses distance already reduced by throw.
+        boolean didFallBreak = state.isSummoned() && state.isGuarding()
+                && event.getDistance() >= GestaltCosts.FALL_BREAK_MIN_DISTANCE;
+        if (didFallBreak) {
             float rawDistance = event.getDistance();
             event.setDistance(Math.max(0f, rawDistance - GestaltCosts.FALL_BREAK_DISTANCE_REDUCTION));
             event.setDamageMultiplier(event.getDamageMultiplier() * GestaltCosts.FALL_BREAK_DAMAGE_MULTIPLIER);
@@ -182,6 +180,9 @@ public class GestaltThrowEvents {
                     GestaltAcquisitionEvents.crashGestalt(sp);
                 }
             }
+        } else if (hasThrowProtection && player instanceof ServerPlayer sp) {
+            // Throw landing without fall break: still trigger the gestalt impact shake.
+            GestaltNetworking.broadcastFallBreakImpact(sp);
         }
     }
 

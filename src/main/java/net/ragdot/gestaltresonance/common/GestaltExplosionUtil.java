@@ -2,7 +2,6 @@ package net.ragdot.gestaltresonance.common;
 
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -38,6 +37,16 @@ public final class GestaltExplosionUtil {
      */
     public static void detonate(Level level, Vec3 center, float radius, float damage,
                                 DamageSource source, @Nullable ParticleOptions particles) {
+        detonate(level, center, radius, damage, source, particles, null);
+    }
+
+    /**
+     * Same as {@link #detonate} but skips {@code extraExcluded} in addition to the attacker.
+     * Used by Phase Mine to prevent the dragged entity from being hit by its own afterimage explosions.
+     */
+    public static void detonate(Level level, Vec3 center, float radius, float damage,
+                                DamageSource source, @Nullable ParticleOptions particles,
+                                @Nullable Entity extraExcluded) {
         if (radius <= 0 || damage <= 0) return;
 
         Entity attacker = source.getEntity();
@@ -47,7 +56,8 @@ public final class GestaltExplosionUtil {
                 center.x + radius, center.y + radius, center.z + radius
         );
 
-        for (LivingEntity living : level.getEntitiesOfClass(LivingEntity.class, box, e -> e != attacker)) {
+        for (LivingEntity living : level.getEntitiesOfClass(LivingEntity.class, box,
+                e -> e != attacker && e != extraExcluded)) {
             // Measure to the entity's midpoint for a sensible falloff feel
             Vec3 mid = living.position().add(0, living.getBbHeight() * 0.5, 0);
             double dist = mid.distanceTo(center);
@@ -65,21 +75,19 @@ public final class GestaltExplosionUtil {
             living.hurt(source, finalDamage);
         }
 
-        // Sound — matches the pitch randomisation used by vanilla Explosion
         level.playSound(
                 null, center.x, center.y, center.z,
-                SoundEvents.GENERIC_EXPLODE,
+                GestaltSounds.GESTALT_EXPLOSION.get(),
                 SoundSource.BLOCKS,
                 4.0f,
                 (1.0f + (level.random.nextFloat() - level.random.nextFloat()) * 0.2f) * 0.7f
         );
 
-        // Particles (ServerLevel only; caller passes null to skip)
-        if (particles != null && level instanceof ServerLevel serverLevel) {
-            double spread = radius * 0.35;
-            serverLevel.sendParticles(particles,
+        if (level instanceof ServerLevel serverLevel) {
+            ParticleOptions effectiveParticles = (particles != null) ? particles : GestaltParticles.GESTALT_EXPLOSION.get();
+            serverLevel.sendParticles(effectiveParticles,
                     center.x, center.y, center.z,
-                    40, spread, spread, spread, 0.05);
+                    12, 0.0, 0.0, 0.0, 0.0);
         }
     }
 
@@ -91,7 +99,7 @@ public final class GestaltExplosionUtil {
      * @param gestaltLevel current gestalt level (1–15)
      */
     public static float scaledDamage(float base, int gestaltLevel) {
-        return base + gestaltLevel * 0.5f;
+        return base + gestaltLevel * 0.6f;
     }
 
     /**

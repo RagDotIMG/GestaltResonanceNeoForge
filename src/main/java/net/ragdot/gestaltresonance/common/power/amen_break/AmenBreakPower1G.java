@@ -32,7 +32,7 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 
 /**
- * Amen Break — Power 1G.
+ * Amen Break — Queen Killer (Power 1G).
  *
  * Activation: Guard + Z. Drops guard, deducts 20 gestalt-XP and 2.0 exhaustion, transitions
  * gestalt action to {@link GestaltAction#POWER_1G_WINDUP} for 40 ticks. At tick 40, sweeps the
@@ -61,11 +61,12 @@ public final class AmenBreakPower1G {
         // for dispatch — but state may have changed between client press and server handle.)
         if (!state.isSummoned()) return;
         if (!state.isAwakened()) return;
+        if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[0][2]) return;
         if (!state.isGuarding()) return;
         if (state.getAction() != GestaltAction.GUARD) return;
 
         long currentTick = player.getServer().getTickCount();
-        if (state.hasPowerCooldown(currentTick)) return;
+        if (state.hasPowerCooldown(KEY.slot(), KEY.modifier(), currentTick)) return;
         if (state.getTotalGestaltXp() < GestaltCosts.POWER_1G_XP_COST) return;
 
         // Drop guard and pay costs (may de-level if within-level XP is insufficient)
@@ -76,7 +77,7 @@ public final class AmenBreakPower1G {
         // Begin windup
         state.setAction(GestaltAction.POWER_1G_WINDUP);
         state.setPowerWindupStartTick(currentTick);
-        state.setPowerCooldownUntilTick(currentTick + GestaltCosts.POWER_1G_COOLDOWN_TICKS);
+        state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.POWER_1G_COOLDOWN_TICKS);
 
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
@@ -86,7 +87,7 @@ public final class AmenBreakPower1G {
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1G_COOLDOWN_TICKS);
 
-        GestaltResonance.LOGGER.debug("AmenBreak Power 1G activated for {}", player.getName().getString());
+        GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G activated for {}", player.getName().getString());
     }
 
     // ── Per-tick logic ────────────────────────────────────────────────────────
@@ -226,7 +227,7 @@ public final class AmenBreakPower1G {
         state.setPowerWindupStartTick(-1L);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.IDLE);
-        GestaltResonance.LOGGER.debug("AmenBreak Power 1G aborted (took damage) for {}", player.getName().getString());
+        GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G aborted (took damage) for {}", player.getName().getString());
         // Cooldown stays set — no refund.
     }
 }

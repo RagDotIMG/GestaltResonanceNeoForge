@@ -39,6 +39,8 @@ public class GestaltAttackClientEvents {
     private static boolean wasAttackHeld = false;
     /** Last mining state we synced to the server, so we only push on transitions. */
     private static boolean lastMiningSynced = false;
+    /** Set when charged strike is armed so GestaltKeybinds.Post can cancel the block-crack vanilla started. */
+    static boolean suppressBlockBreakThisTick = false;
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Pre event) {
@@ -63,6 +65,10 @@ public class GestaltAttackClientEvents {
         boolean freshPress = attackHeld && !wasAttackHeld;
         if (freshPress && action == GestaltAction.GUARD) {
             PacketDistributor.sendToServer(new StartChargedStrikeC2S());
+            while (mc.options.keyAttack.consumeClick()) {} // suppress vanilla attack on arm
+            suppressBlockBreakThisTick = true;
+            wasAttackHeld = attackHeld;
+            return;
         }
         boolean freshRelease = !attackHeld && wasAttackHeld;
         if (freshRelease && action == GestaltAction.CHARGED_STRIKE_WINDUP) {

@@ -2,17 +2,20 @@ package net.ragdot.gestaltresonance.common;
 
 import javax.annotation.Nullable;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
+import net.ragdot.gestaltresonance.GestaltResonance;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleHitEvent;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
@@ -36,12 +39,15 @@ import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
  */
 public class GestaltSoulProjectionEvents {
 
+    private static final ResourceLocation FLIGHT_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "soul_projection_flight");
+
     // ── Event subscriptions (instance, registered to NeoForge.EVENT_BUS) ───────
 
     /** Body double was hit on the server → forced exit with doubled damage. */
     @SubscribeEvent
     public void onBodyDoubleHit(BodyDoubleHitEvent event) {
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        MinecraftServer server = event.getServer();
         if (server == null) return;
         ServerPlayer player = server.getPlayerList().getPlayer(event.getOwnerUuid());
         if (player == null) return;
@@ -125,7 +131,9 @@ public class GestaltSoulProjectionEvents {
 
         // Apply effects (after state, so GhostPlayerHandler reads the updated state)
         GhostPlayerHandler.setGhostState(player, true);
-        player.getAbilities().mayfly = true;
+        AttributeInstance flight = player.getAttribute(NeoForgeMod.CREATIVE_FLIGHT);
+        if (flight != null) flight.addOrUpdateTransientModifier(new AttributeModifier(
+                FLIGHT_MODIFIER_ID, 1.0, AttributeModifier.Operation.ADD_VALUE));
         player.getAbilities().flying = true;
         player.getAbilities().setFlyingSpeed(GestaltCosts.SOUL_PROJECTION_FLY_SPEED);
         player.onUpdateAbilities();
@@ -202,7 +210,11 @@ public class GestaltSoulProjectionEvents {
     public static void teardown(ServerPlayer player, SoulProjectionExitType exitType,
                                 @Nullable DamageSource source, float rawDamage) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (!state.isSoulProjecting()) return;
+        if (!state.isSoulProjecting()) {
+            // State already cleared (race condition): still clean up any orphaned body double.
+            BodyDoubleEntity.dismissExistingDoubles(player.level(), player.getUUID());
+            return;
+        }
 
         Vec3 anchor = state.getSoulProjectionAnchor();
 
@@ -210,8 +222,9 @@ public class GestaltSoulProjectionEvents {
         GhostPlayerHandler.setGhostState(player, false);
 
         // 2. Restore flight (skip if creative/spectator — they keep their own flight)
+        AttributeInstance flight = player.getAttribute(NeoForgeMod.CREATIVE_FLIGHT);
         if (!player.isCreative() && !player.isSpectator()) {
-            player.getAbilities().mayfly = false;
+            if (flight != null) flight.removeModifier(FLIGHT_MODIFIER_ID);
             player.getAbilities().flying = false;
             player.getAbilities().setFlyingSpeed(GestaltCosts.DEFAULT_FLY_SPEED);
             player.onUpdateAbilities();

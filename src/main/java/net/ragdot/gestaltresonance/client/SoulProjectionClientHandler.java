@@ -1,8 +1,11 @@
 package net.ragdot.gestaltresonance.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
@@ -15,6 +18,28 @@ public class SoulProjectionClientHandler {
 
     private static float shakeStrength = 0f;
     private static float shakeStrengthO = 0f;
+
+    private static WhisperSound activeWhisper = null;
+
+    private static class WhisperSound extends AbstractTickableSoundInstance {
+        WhisperSound() {
+            super(SoundEvents.AMBIENT_SOUL_SAND_VALLEY_MOOD.value(), SoundSource.AMBIENT, RandomSource.create());
+            this.looping = true;
+            this.delay = 0;
+            this.volume = 0.6f;
+            this.pitch = 1.0f;
+            this.attenuation = SoundInstance.Attenuation.NONE;
+            this.relative = true;
+        }
+
+        @Override
+        public void tick() {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) { this.stop(); return; }
+            PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            if (!state.isSoulProjecting()) this.stop();
+        }
+    }
 
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
@@ -33,8 +58,13 @@ public class SoulProjectionClientHandler {
                 }
                 heartbeatCounter = 0;
             }
+            if (activeWhisper == null || activeWhisper.isStopped()) {
+                activeWhisper = new WhisperSound();
+                mc.getSoundManager().play(activeWhisper);
+            }
         } else {
             heartbeatCounter = 0;
+            activeWhisper = null; // let the tick() stop it naturally
         }
     }
 

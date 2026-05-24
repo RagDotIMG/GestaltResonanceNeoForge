@@ -37,31 +37,38 @@ public final class GestaltSkinRegistry {
         ResourceLocation amenBreak = ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "amen_break");
         SKINS.put(amenBreak, List.of(
                 new GestaltSkin(skinId("amen_break", "default"),
-                        Component.literal("Default"), tex("amen_break"), null),
+                        Component.literal("Default"), tex("amen_break/default"), null),
                 new GestaltSkin(skinId("amen_break", "alt"),
-                        Component.literal("Recolor I"), tex("amen_break_alt"), null),
+                        Component.literal("Recolor I"), tex("amen_break/alt"), null),
                 new GestaltSkin(skinId("amen_break", "alt2"),
-                        Component.literal("Recolor II"), tex("amen_break_alt2"), null),
+                        Component.literal("Recolor II"), tex("amen_break/alt2"), null),
                 new GestaltSkin(skinId("amen_break", "alt3"),
-                        Component.literal("Recolor III"), tex("amen_break_alt3"), null),
+                        Component.literal("Recolor III"), tex("amen_break/alt3"), null),
                 new GestaltSkin(skinId("amen_break", "biome"),
-                        Component.literal("Biome"), tex("amen_break_biome"),
+                        Component.literal("Biome"), tex("amen_break/biome"),
                         new SkinUnlockCondition.VisitBiome(Biomes.SWAMP)),
                 new GestaltSkin(skinId("amen_break", "trial"),
-                        Component.literal("Trial"), tex("amen_break_trial"),
+                        Component.literal("Trial"), tex("amen_break/trial"),
                         new SkinUnlockCondition.LootVault()),
                 new GestaltSkin(skinId("amen_break", "penrose"),
-                        Component.literal("Penrose"), tex("amen_break_penrose"),
+                        Component.literal("Penrose"), tex("amen_break/penrose"),
                         new SkinUnlockCondition.PickUpItem(Items.CHORUS_FLOWER)),
                 new GestaltSkin(skinId("amen_break", "warden"),
-                        Component.literal("Warden"), tex("amen_break_warden"),
+                        Component.literal("Warden"), tex("amen_break/warden"),
                         new SkinUnlockCondition.KillMob(EntityType.WARDEN)),
                 new GestaltSkin(skinId("amen_break", "glitch"),
-                        Component.literal("Glitch"), tex("amen_break_glitch"),
+                        Component.literal("Glitch"), tex("amen_break/glitch"),
                         new SkinUnlockCondition.GestaltCrashCount(50)),
                 new GestaltSkin(skinId("amen_break", "mastery"),
-                        Component.literal("Mastery"), tex("amen_break_mastery"),
+                        Component.literal("Mastery"), tex("amen_break/mastery"),
                         new SkinUnlockCondition.GestaltLevel(15))
+        ));
+
+        // ── Spillways ─────────────────────────────────────────────────────────
+        ResourceLocation spillways = ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "spillways");
+        SKINS.put(spillways, List.of(
+                new GestaltSkin(skinId("spillways", "default"),
+                        Component.literal("Default"), tex("spillways/default"), null)
         ));
     }
 
