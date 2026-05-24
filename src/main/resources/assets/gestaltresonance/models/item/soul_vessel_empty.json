@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gestaltresonance:item/soul_vessel_empty"
+  },
+  "overrides": [
+    {
+      "predicate": { "gestaltresonance:filled": 1.0 },
+      "model": "gestaltresonance:item/soul_vessel_filled"
+    }
+  ]
+}

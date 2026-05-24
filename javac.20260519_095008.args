@@ -1,0 +1,6 @@
+-Xlint:deprecation
+-cp
+/home/rag/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/21.1.226/3f70667f7ce4460d7d8ec848a98de0a6b7f5986c/neoforge-21.1.226-userdev.jar:/home/rag/.gradle/caches/neoformruntime/artifacts/minecraft_1.21.1_server.jar
+-sourcepath
+src/main/java
+src/main/java/net/ragdot/gestaltresonance/common/GestaltSoulProjectionEvents.java
