@@ -55,6 +55,7 @@ public final class AmenBreakPower2G {
         if (!state.isGuarding()) return;
         if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[1][2]) return;
         if (state.isPhaseOutActive()) return;
+        if (state.isPhaseCourtActive()) return;
 
         state.setPhaseOutArmed(!state.isPhaseOutArmed());
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
@@ -136,11 +137,17 @@ public final class AmenBreakPower2G {
         if (!state.isAwakened()) return;
         if (!GestaltIds.AMEN_BREAK.equals(state.getGestaltId())) return;
 
-        // Soul projection guard: if projecting, Phase Out does not trigger
+        // Soul projection or Phase Court: Phase Out does not trigger
         if (state.isSoulProjecting()) return;
+        if (state.isPhaseCourtActive()) return;
 
         // Damage that bypasses invulnerability (void, /kill) is not intercepted by Phase Out
         if (event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)) return;
+
+        // Only trigger on entity-originated damage (mobs, players, projectiles, dispenser traps).
+        // Pure environmental sources (fall, lava, fire, drowning, etc.) have neither an attacker
+        // nor a direct entity. Dispenser traps have no attacker but do have a direct projectile entity.
+        if (event.getSource().getEntity() == null && event.getSource().getDirectEntity() == null) return;
 
         // Incoming damage must be > 0 (after potential modifiers already applied at HIGH)
         if (event.getAmount() <= 0f) return;

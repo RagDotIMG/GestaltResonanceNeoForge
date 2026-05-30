@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import org.jetbrains.annotations.NotNull;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -18,9 +19,11 @@ import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.ragdot.gestaltresonance.common.PhaseBlossomZoneTracker;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PhaseBlossomEntity extends Entity {
 
@@ -32,6 +35,8 @@ public class PhaseBlossomEntity extends Entity {
             SynchedEntityData.defineId(PhaseBlossomEntity.class, EntityDataSerializers.OPTIONAL_BLOCK_POS);
     private static final EntityDataAccessor<Boolean> DATA_COLLAPSING =
             SynchedEntityData.defineId(PhaseBlossomEntity.class, EntityDataSerializers.BOOLEAN);
+
+    private static final Map<UUID, PhaseBlossomEntity> SERVER_REGISTRY = new ConcurrentHashMap<>();
 
     public PhaseBlossomEntity(EntityType<? extends PhaseBlossomEntity> type, Level level) {
         super(type, level);
@@ -63,6 +68,8 @@ public class PhaseBlossomEntity extends Entity {
         // Client: DATA_HIT_POS is still empty (synced data packet not yet received);
         //         registration is deferred to onSyncedDataUpdated() below.
         if (!level().isClientSide()) {
+            UUID owner = getOwnerUuid();
+            if (owner != null) SERVER_REGISTRY.put(owner, this);
             getHitPos().ifPresent(hitPos ->
                 PhaseBlossomZoneTracker.register(level(), solidBlocks(hitPos, getFacing())));
         }
@@ -117,6 +124,10 @@ public class PhaseBlossomEntity extends Entity {
 
     @Override
     public void remove(RemovalReason reason) {
+        if (!level().isClientSide()) {
+            UUID owner = getOwnerUuid();
+            if (owner != null) SERVER_REGISTRY.remove(owner, this);
+        }
         // Unregister any remaining zone entries (no-op if already cleared by setCollapsing).
         getHitPos().ifPresent(hitPos ->
             PhaseBlossomZoneTracker.unregister(level(), computeBlocks(hitPos, getFacing())));
@@ -197,8 +208,20 @@ public class PhaseBlossomEntity extends Entity {
                 .stream().findFirst();
     }
 
+    /** Searches every loaded dimension — one blossom per player globally, regardless of where it was placed. */
+    public static Optional<PhaseBlossomEntity> findBlossomGlobal(MinecraftServer server, UUID ownerUuid) {
+        PhaseBlossomEntity cached = SERVER_REGISTRY.get(ownerUuid);
+        if (cached != null && !cached.isRemoved()) return Optional.of(cached);
+        // Fallback: AABB scan (handles edge cases like registry miss after hot reload).
+        for (ServerLevel level : server.getAllLevels()) {
+            Optional<PhaseBlossomEntity> found = findBlossom(level, ownerUuid);
+            if (found.isPresent()) return found;
+        }
+        return Optional.empty();
+    }
+
     public static void dismissBlossom(ServerLevel level, UUID ownerUuid) {
-        findBlossom(level, ownerUuid).ifPresent(e -> e.setCollapsing(true));
+        findBlossomGlobal(level.getServer(), ownerUuid).ifPresent(e -> e.setCollapsing(true));
     }
 
     // ── Synced data accessors ─────────────────────────────────────────────────

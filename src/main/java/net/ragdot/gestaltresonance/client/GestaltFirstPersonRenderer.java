@@ -255,12 +255,17 @@ public class GestaltFirstPersonRenderer {
             finalZ = pz + OFFSET_X * Mth.sin(yawRad) + LEDGE_GRAB_OFFSET_Z * Mth.cos(yawRad);
         } else if (wallSliding) {
             Direction wallFace = state.getWallSlideFace();
-            gestaltYaw = (wallFace != null) ? directionToYaw(wallFace)
+            // posYaw points toward the wall — used for placement against the surface.
+            // gestaltYaw is flipped 180° so the gestalt faces away from the wall.
+            float posYaw = (wallFace != null) ? directionToYaw(wallFace)
                     : Mth.rotLerp(partialTick, player.yBodyRotO, player.yBodyRot);
-            float yawRad = gestaltYaw * Mth.DEG_TO_RAD;
-            finalX = px + OFFSET_X * Mth.cos(yawRad) - LEDGE_GRAB_OFFSET_Z * Mth.sin(yawRad);
+            gestaltYaw = posYaw + 180F;
+            float posYawRad = posYaw * Mth.DEG_TO_RAD;
+            // Negate OFFSET_X: facing away from wall (180° flip) puts "right of posYaw" on the
+            // wrong lateral side — negating it mirrors the gestalt to the correct left side.
+            finalX = px + (-OFFSET_X) * Mth.cos(posYawRad) - LEDGE_GRAB_OFFSET_Z * Mth.sin(posYawRad);
             finalY = py + LEDGE_GRAB_OFFSET_Y;
-            finalZ = pz + OFFSET_X * Mth.sin(yawRad) + LEDGE_GRAB_OFFSET_Z * Mth.cos(yawRad);
+            finalZ = pz + (-OFFSET_X) * Mth.sin(posYawRad) + LEDGE_GRAB_OFFSET_Z * Mth.cos(posYawRad);
         } else if (attacking) {
             gestaltYaw = Mth.rotLerp(partialTick, player.yHeadRotO, player.getYHeadRot()) + 20F;
             float headPitch = Mth.rotLerp(partialTick, player.xRotO, player.getXRot());
@@ -366,7 +371,9 @@ public class GestaltFirstPersonRenderer {
         int light = net.minecraft.client.renderer.LightTexture.pack(15, 15);
         fpModel.skipIntroFor(player.getUUID());
         fpModel.setupAnim(player, 0, 0, player.tickCount + partialTick, 0, 0);
-        fpModel.renderToBuffer(poseStack, vertexConsumer, light, OverlayTexture.NO_OVERLAY, 0xAAFFFFFF);
+        // During Phase Court the player is nearly invisible — match at ~30% opacity.
+        int fpColor = state.isPhaseCourtActive() ? 0x4DFFFFFF : 0xAAFFFFFF;
+        fpModel.renderToBuffer(poseStack, vertexConsumer, light, OverlayTexture.NO_OVERLAY, fpColor);
 
         bufferSource.endBatch();
         poseStack.popPose();

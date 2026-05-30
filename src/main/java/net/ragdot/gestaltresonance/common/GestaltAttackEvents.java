@@ -69,6 +69,7 @@ public class GestaltAttackEvents {
         }
 
         // ── Cannot start chain ───────────────────────────────────────────────
+        if (state.isPhaseCourtActive()) return;
         if (action == GestaltAction.GUARD || action == GestaltAction.LEDGE_GRAB || action == GestaltAction.THROW
                 || action == GestaltAction.CHARGED_STRIKE_WINDUP || action == GestaltAction.CHARGED_STRIKE_TRAVEL) return;
         long now = player.getServer().getTickCount();
@@ -259,7 +260,7 @@ public class GestaltAttackEvents {
                 double dz = player.getZ() - target.getZ();
                 double len = Math.sqrt(dx * dx + dz * dz);
                 if (len > 0) {
-                    target.knockback(0.4 * GestaltCosts.CHARGED_STRIKE_KNOCKBACK_MULTIPLIER, dx / len, dz / len);
+                    target.knockback(GestaltCosts.CHARGED_STRIKE_KNOCKBACK, dx / len, dz / len);
                 }
                 GestaltNetworking.broadcastHitParticles(player,
                         (float) target.getX(), (float) (target.getY() + target.getBbHeight() * 0.5f),
@@ -299,14 +300,25 @@ public class GestaltAttackEvents {
             case HIT_3 -> (byte) 3;
             default    -> (byte) 1;
         };
+        float hitDamage = switch (hitAction) {
+            case HIT_1 -> baseDamage * GestaltCosts.HIT_1_DAMAGE_MULTIPLIER;
+            case HIT_3 -> baseDamage * GestaltCosts.HIT_3_DAMAGE_MULTIPLIER;
+            default    -> baseDamage;
+        };
+        double hitKnockback = switch (hitAction) {
+            case HIT_1 -> GestaltCosts.HIT_1_KNOCKBACK;
+            case HIT_2 -> GestaltCosts.HIT_2_KNOCKBACK;
+            case HIT_3 -> GestaltCosts.HIT_3_KNOCKBACK;
+            default    -> GestaltCosts.HIT_1_KNOCKBACK;
+        };
         for (LivingEntity target : targets) {
-            target.hurt(GestaltDamageTypes.gestalt(player.level(), player), baseDamage);
+            target.hurt(GestaltDamageTypes.gestalt(player.level(), player), hitDamage);
             // knockback(x, z) subtracts the direction, so pass player→target reversed to push away
             double dx = player.getX() - target.getX();
             double dz = player.getZ() - target.getZ();
             double len = Math.sqrt(dx * dx + dz * dz);
             if (len > 0) {
-                target.knockback(0.4, dx / len, dz / len);
+                target.knockback(hitKnockback, dx / len, dz / len);
             }
             GestaltNetworking.broadcastHitParticles(player,
                     (float) target.getX(), (float) (target.getY() + target.getBbHeight() * 0.5f),

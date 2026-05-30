@@ -174,6 +174,39 @@ public class PlayerGestaltState {
     /** Server-side cooldown countdown. Decrements each tick when > 0. */
     private int phaseOutCooldownTicks = 0;
 
+    // --- Phase Court state (transient, not serialized) ---
+    /** True during the 160-tick Phase Court ghost window. */
+    private boolean phaseCourtActive = false;
+    /** Ticks remaining in the current Phase Court window. */
+    private int phaseCourtTicksRemaining = 0;
+    /** Entity ID of the body double spawned at activation; -1 = none. */
+    private int phaseCourtBodyDoubleId = -1;
+    /** True once any Break Core ability is used during the current window. */
+    private boolean breakCoreUsed = false;
+    /** Entity ID of the Break Core 1B marked entity; -1 = none. */
+    private int breakCoreMarkedEntityId = -1;
+    /** Client-synced cooldown countdown (starts at activation). */
+    private int phaseCourtCooldownTicks = 0;
+    // Phase Court Break Core 1G post-hit sequence
+    /** Counter driving the 1G freeze + explosion sequence; 0 = inactive. */
+    private int phaseCourtPostHitTick = 0;
+    /** Entity ID of the 1G target being frozen. */
+    private int phaseCourtPostHitTargetId = -1;
+    /** Locked world position of the 1G target during freeze. */
+    @Nullable private Vec3 phaseCourtPostHitTargetPos = null;
+    /** Locked world position of the player during the 1G freeze (ticks 1-10). */
+    @Nullable private Vec3 phaseCourtPostHitPlayerPos = null;
+    // Break Core 1B recording phase
+    private boolean breakCoreRecording = false;
+    private int breakCoreRecordTick = 0;
+    private final Vec3[] breakCoreSnapshots = new Vec3[GestaltCosts.PHASE_COURT_SNAPSHOT_COUNT];
+    private final int[] breakCoreAfterimageIds = new int[]{-1,-1,-1,-1,-1,-1,-1,-1};
+    private int breakCoreSnapshotCount = 0;
+    // Break Core 1B dragback phase
+    private boolean breakCoreDragback = false;
+    private int breakCoreDragbackIndex = -1;
+    private float breakCoreBankedDamage = 0f;
+
     // --- Soul projection state (transient, not serialized) ---
     private boolean soulProjecting = false;
     private int bodyDoubleEntityId = -1;
@@ -429,12 +462,86 @@ public class PlayerGestaltState {
     public void setPhaseOutCooldownTicks(int t) { phaseOutCooldownTicks = Math.max(0, t); }
     public boolean hasPhaseOutCooldown() { return phaseOutCooldownTicks > 0; }
 
+    // --- Phase Court accessors ---
+    public boolean isPhaseCourtActive() { return phaseCourtActive; }
+    public void setPhaseCourtActive(boolean v) { phaseCourtActive = v; }
+    public int getPhaseCourtTicksRemaining() { return phaseCourtTicksRemaining; }
+    public void setPhaseCourtTicksRemaining(int t) { phaseCourtTicksRemaining = t; }
+    public int getPhaseCourtBodyDoubleId() { return phaseCourtBodyDoubleId; }
+    public void setPhaseCourtBodyDoubleId(int id) { phaseCourtBodyDoubleId = id; }
+    public boolean isBreakCoreUsed() { return breakCoreUsed; }
+    public void setBreakCoreUsed(boolean v) { breakCoreUsed = v; }
+    public int getBreakCoreMarkedEntityId() { return breakCoreMarkedEntityId; }
+    public void setBreakCoreMarkedEntityId(int id) { breakCoreMarkedEntityId = id; }
+    public int getPhaseCourtCooldownTicks() { return phaseCourtCooldownTicks; }
+    public void setPhaseCourtCooldownTicks(int t) { phaseCourtCooldownTicks = Math.max(0, t); }
+    public boolean hasPhaseCourtCooldown() { return phaseCourtCooldownTicks > 0; }
+    // Phase Court 1G post-hit
+    public int getPhaseCourtPostHitTick() { return phaseCourtPostHitTick; }
+    public void setPhaseCourtPostHitTick(int t) { phaseCourtPostHitTick = t; }
+    public int getPhaseCourtPostHitTargetId() { return phaseCourtPostHitTargetId; }
+    public void setPhaseCourtPostHitTargetId(int id) { phaseCourtPostHitTargetId = id; }
+    @Nullable public Vec3 getPhaseCourtPostHitTargetPos() { return phaseCourtPostHitTargetPos; }
+    public void setPhaseCourtPostHitTargetPos(@Nullable Vec3 v) { phaseCourtPostHitTargetPos = v; }
+    @Nullable public Vec3 getPhaseCourtPostHitPlayerPos() { return phaseCourtPostHitPlayerPos; }
+    public void setPhaseCourtPostHitPlayerPos(@Nullable Vec3 v) { phaseCourtPostHitPlayerPos = v; }
+    // Break Core 1B recording
+    public boolean isBreakCoreRecording() { return breakCoreRecording; }
+    public void setBreakCoreRecording(boolean v) { breakCoreRecording = v; }
+    public int getBreakCoreRecordTick() { return breakCoreRecordTick; }
+    public void setBreakCoreRecordTick(int t) { breakCoreRecordTick = t; }
+    public Vec3[] getBreakCoreSnapshots() { return breakCoreSnapshots; }
+    public int[] getBreakCoreAfterimageIds() { return breakCoreAfterimageIds; }
+    public int getBreakCoreSnapshotCount() { return breakCoreSnapshotCount; }
+    public void setBreakCoreSnapshotCount(int n) { breakCoreSnapshotCount = n; }
+    // Break Core 1B dragback
+    public boolean isBreakCoreDragback() { return breakCoreDragback; }
+    public void setBreakCoreDragback(boolean v) { breakCoreDragback = v; }
+    public int getBreakCoreDragbackIndex() { return breakCoreDragbackIndex; }
+    public void setBreakCoreDragbackIndex(int i) { breakCoreDragbackIndex = i; }
+    public float getBreakCoreBankedDamage() { return breakCoreBankedDamage; }
+    public void setBreakCoreBankedDamage(float v) { breakCoreBankedDamage = v; }
+    public void addBreakCoreBankedDamage(float v) { breakCoreBankedDamage += v; }
+    public void clearBreakCoreState() {
+        breakCoreMarkedEntityId = -1;
+        breakCoreUsed = false;
+        breakCoreRecording = false;
+        breakCoreRecordTick = 0;
+        breakCoreSnapshotCount = 0;
+        for (int i = 0; i < breakCoreSnapshots.length; i++) breakCoreSnapshots[i] = null;
+        for (int i = 0; i < breakCoreAfterimageIds.length; i++) breakCoreAfterimageIds[i] = -1;
+        breakCoreDragback = false;
+        breakCoreDragbackIndex = -1;
+        breakCoreBankedDamage = 0f;
+    }
+
     // --- Power state accessors ---
     public boolean hasPowerCooldown(GestaltPowerSlot slot, GestaltPowerModifier mod, long tick) {
         return tick < perPowerCooldowns[slot.ordinal() * 3 + mod.ordinal()];
     }
     public void setPowerCooldown(GestaltPowerSlot slot, GestaltPowerModifier mod, long until) {
         perPowerCooldowns[slot.ordinal() * 3 + mod.ordinal()] = until;
+    }
+
+    /** Clamps all gestalt power cooldowns to at most 20 ticks (1 second) for creative players. Returns true if any value changed. */
+    public boolean clampAllCooldownsForCreative(long now) {
+        long cap = now + 20;
+        boolean changed = false;
+        for (int i = 0; i < perPowerCooldowns.length; i++) {
+            if (perPowerCooldowns[i] > cap) {
+                perPowerCooldowns[i] = cap;
+                changed = true;
+            }
+        }
+        if (phaseCourtCooldownTicks > 20) {
+            phaseCourtCooldownTicks = 20;
+            changed = true;
+        }
+        if (phaseOutCooldownTicks > 20) {
+            phaseOutCooldownTicks = 20;
+            changed = true;
+        }
+        return changed;
     }
 
     public long getPowerWindupStartTick() { return powerWindupStartTick; }
@@ -702,6 +809,24 @@ public class PlayerGestaltState {
         c.markedEntityId = this.markedEntityId;
         c.markedEntityTicksRemaining = this.markedEntityTicksRemaining;
         c.markedEntityLastPos = this.markedEntityLastPos;
+        c.phaseCourtActive = this.phaseCourtActive;
+        c.phaseCourtTicksRemaining = this.phaseCourtTicksRemaining;
+        c.phaseCourtBodyDoubleId = this.phaseCourtBodyDoubleId;
+        c.breakCoreUsed = this.breakCoreUsed;
+        c.breakCoreMarkedEntityId = this.breakCoreMarkedEntityId;
+        c.phaseCourtCooldownTicks = this.phaseCourtCooldownTicks;
+        c.phaseCourtPostHitTick = this.phaseCourtPostHitTick;
+        c.phaseCourtPostHitTargetId = this.phaseCourtPostHitTargetId;
+        c.phaseCourtPostHitTargetPos = this.phaseCourtPostHitTargetPos;
+        c.phaseCourtPostHitPlayerPos = this.phaseCourtPostHitPlayerPos;
+        c.breakCoreRecording = this.breakCoreRecording;
+        c.breakCoreRecordTick = this.breakCoreRecordTick;
+        System.arraycopy(this.breakCoreSnapshots, 0, c.breakCoreSnapshots, 0, this.breakCoreSnapshots.length);
+        System.arraycopy(this.breakCoreAfterimageIds, 0, c.breakCoreAfterimageIds, 0, this.breakCoreAfterimageIds.length);
+        c.breakCoreSnapshotCount = this.breakCoreSnapshotCount;
+        c.breakCoreDragback = this.breakCoreDragback;
+        c.breakCoreDragbackIndex = this.breakCoreDragbackIndex;
+        c.breakCoreBankedDamage = this.breakCoreBankedDamage;
         c.soulProjecting = this.soulProjecting;
         c.bodyDoubleEntityId = this.bodyDoubleEntityId;
         c.soulProjectionAnchor = this.soulProjectionAnchor;

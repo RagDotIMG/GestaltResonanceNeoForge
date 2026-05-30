@@ -50,6 +50,7 @@ import net.ragdot.gestaltresonance.common.GestaltAction;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.client.PhaseCourtClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
 import net.ragdot.gestaltresonance.common.network.PhaseOutToggleC2S;
@@ -203,6 +204,7 @@ public class GestaltKeybinds {
         }
 
         SoulProjectionClientHandler.tick();
+        PhaseCourtClientHandler.tick();
         WallSlideClientHandler.tick();
         LedgeGrabClientHandler.tick();
     }
@@ -239,8 +241,13 @@ public class GestaltKeybinds {
 
         if (!event.isUseItem()) return;
 
-        // Block guard initiation during power windups — the power has priority over guard.
-        if (state.getAction() == GestaltAction.POWER_1G_WINDUP) return;
+        // Block guard initiation during power windups and charged-strike — these actions own right-click.
+        GestaltAction action = state.getAction();
+        if (action == GestaltAction.POWER_1G_WINDUP
+                || action == GestaltAction.CHARGED_STRIKE_WINDUP) {
+            event.setCanceled(true);
+            return;
+        }
 
         // Already guarding or waiting for server confirmation: don't cancel here.
         // GestaltGuardEvents.cancelIfGuarding handles the server-side PlayerInteractEvent,

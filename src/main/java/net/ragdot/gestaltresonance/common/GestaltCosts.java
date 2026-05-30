@@ -53,6 +53,13 @@ public final class GestaltCosts {
     /** Cooldown (ticks) applied after the full 3-hit chain completes. Shared with charged strike cooldowns. */
     public static final int CHAIN_COOLDOWN_TICKS = 45;
 
+    public static final float  HIT_1_DAMAGE_MULTIPLIER = 0.6f;
+    public static final float  HIT_3_DAMAGE_MULTIPLIER = 1.4f;
+
+    public static final double HIT_1_KNOCKBACK = 0.2;
+    public static final double HIT_2_KNOCKBACK = 0.2;
+    public static final double HIT_3_KNOCKBACK = 0.3;
+
     // ── Charged strike ──
 
     /** Ticks the player must hold left-click before the charge is releasable as a fire (otherwise it aborts). */
@@ -71,10 +78,10 @@ public final class GestaltCosts {
     public static final float CHARGED_STRIKE_EXHAUSTION = 4.0f;
 
     /** Damage multiplier applied on top of the standard hit-chain damage formula. */
-    public static final float CHARGED_STRIKE_DAMAGE_MULTIPLIER = 2.0f;
+    public static final float CHARGED_STRIKE_DAMAGE_MULTIPLIER = 2.3f;
 
-    /** Knockback multiplier applied on top of the standard hit-chain knockback (0.4 base). */
-    public static final double CHARGED_STRIKE_KNOCKBACK_MULTIPLIER = 2.0;
+    /** Fixed knockback strength for a charged-strike hit. */
+    public static final double CHARGED_STRIKE_KNOCKBACK = 1.6;
 
     /** Travel speed in blocks/tick by SPD stat (index 1..5). Index 5 is sentinel = instant. */
     public static final double[] CHARGED_STRIKE_TRAVEL_SPEED_BY_SPD =
@@ -405,6 +412,50 @@ public final class GestaltCosts {
 
     /** Raycast range for placing the blossom. */
     public static final double PHASE_BLOSSOM_PLACE_RANGE = 3.5;
+
+    // ── Amen Break Phase Court (Power 3G) ──────────────────────────────────
+
+    /** Resonance cost paid at activation. */
+    public static final int PHASE_COURT_RESONANCE_COST           = 75;
+
+    /** Duration of the ghost window in ticks (8 seconds). */
+    public static final int PHASE_COURT_GHOST_TICKS              = 160;
+
+    /** Cooldown in ticks applied at activation (not window end). */
+    public static final int PHASE_COURT_COOLDOWN_TICKS           = 2400;
+
+    /** Number of position snapshots taken during Break Core 1B recording phase. */
+    public static final int PHASE_COURT_SNAPSHOT_COUNT           = 8;
+
+    /** Ticks between each snapshot during recording (8 snapshots × 20 ticks = 160 ticks). */
+    public static final int PHASE_COURT_SNAPSHOT_INTERVAL        = 20;
+
+    /** Total recording phase duration in ticks. */
+    public static final int PHASE_COURT_RECORD_DURATION          = 160;
+
+    /** Speed (blocks/tick) at which the marked entity is dragged toward each snapshot. */
+    public static final double PHASE_COURT_DRAGBACK_SPEED        = 0.4;
+
+    /** Distance within which a dragback waypoint is considered reached. */
+    public static final double PHASE_COURT_CONTACT_RADIUS        = 0.75;
+
+    /** Base explosion radius for afterimage contacts during dragback. */
+    public static final float PHASE_COURT_EXPLOSION_BASE_RADIUS  = 2.5f;
+
+    /** Base explosion damage for afterimage contacts during dragback. */
+    public static final float PHASE_COURT_EXPLOSION_BASE_DAMAGE  = 4.0f;
+
+    /** Damage multiplier for each non-final afterimage explosion. */
+    public static final float PHASE_COURT_EXPLOSION_DAMAGE_MULT  = 0.5f;
+
+    /** Ticks player + target are frozen after Break Core 1G hits. */
+    public static final int PHASE_COURT_1G_PLAYER_LOCK_TICKS     = 20;
+
+    /** Ticks target is frozen total (player lock ends at 20; target stays 20 more). */
+    public static final int PHASE_COURT_1G_TARGET_LOCK_TICKS     = 40;
+
+    /** Alpha byte (0–255) for Phase Court ghost window rendering (~10%). Change here updates both body and gestalt. */
+    public static final int PHASE_COURT_GHOST_ALPHA = 0x1A;
 
     private GestaltCosts() {}
 }

@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -39,6 +41,21 @@ public class SpawnIllusionEntity extends PathfinderMob {
             SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> DATA_OWNER_UUID_STR =
             SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Boolean> DATA_BODY_DOUBLE_MODE =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.BOOLEAN);
+    // Equipment slots for body double rendering (MAINHAND, OFFHAND, FEET, LEGS, CHEST, HEAD)
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_MAINHAND =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_OFFHAND =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_FEET =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_LEGS =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_CHEST =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_SLOT_HEAD =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.ITEM_STACK);
 
     @Nullable private UUID ownerUuid;
     private Vec3 forwardDirection = new Vec3(0, 0, 1);
@@ -54,6 +71,34 @@ public class SpawnIllusionEntity extends PathfinderMob {
                 .add(Attributes.MAX_HEALTH, 200.0)
                 .add(Attributes.MOVEMENT_SPEED, 0.2)
                 .add(Attributes.FOLLOW_RANGE, 32.0);
+    }
+
+    // ── Body double mode ──────────────────────────────────────────────────────
+
+    public void setBodyDoubleMode(boolean v) { entityData.set(DATA_BODY_DOUBLE_MODE, v); }
+    public boolean isBodyDoubleMode() { return entityData.get(DATA_BODY_DOUBLE_MODE); }
+
+    public void copyEquipmentFrom(Player player) {
+        entityData.set(DATA_SLOT_MAINHAND, player.getItemBySlot(EquipmentSlot.MAINHAND).copy());
+        entityData.set(DATA_SLOT_OFFHAND,  player.getItemBySlot(EquipmentSlot.OFFHAND).copy());
+        entityData.set(DATA_SLOT_FEET,     player.getItemBySlot(EquipmentSlot.FEET).copy());
+        entityData.set(DATA_SLOT_LEGS,     player.getItemBySlot(EquipmentSlot.LEGS).copy());
+        entityData.set(DATA_SLOT_CHEST,    player.getItemBySlot(EquipmentSlot.CHEST).copy());
+        entityData.set(DATA_SLOT_HEAD,     player.getItemBySlot(EquipmentSlot.HEAD).copy());
+    }
+
+    @Override
+    public ItemStack getItemBySlot(EquipmentSlot slot) {
+        if (!isBodyDoubleMode()) return ItemStack.EMPTY;
+        return switch (slot) {
+            case MAINHAND -> entityData.get(DATA_SLOT_MAINHAND);
+            case OFFHAND  -> entityData.get(DATA_SLOT_OFFHAND);
+            case FEET     -> entityData.get(DATA_SLOT_FEET);
+            case LEGS     -> entityData.get(DATA_SLOT_LEGS);
+            case CHEST    -> entityData.get(DATA_SLOT_CHEST);
+            case HEAD     -> entityData.get(DATA_SLOT_HEAD);
+            default -> ItemStack.EMPTY;
+        };
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────
@@ -93,7 +138,9 @@ public class SpawnIllusionEntity extends PathfinderMob {
         ageTicks++;
         entityData.set(DATA_AGE, ageTicks);
 
-        if (ageTicks % 5 == 0 && level() instanceof ServerLevel sl) {
+        boolean bodyDouble = isBodyDoubleMode();
+
+        if (!bodyDouble && ageTicks % 5 == 0 && level() instanceof ServerLevel sl) {
             for (int i = 0; i < 2; i++) {
                 double px = getX() + (random.nextDouble() - 0.5) * getBbWidth();
                 double py = getY() + random.nextDouble() * getBbHeight();
@@ -104,24 +151,26 @@ public class SpawnIllusionEntity extends PathfinderMob {
 
         // Void check
         if (getY() < level().getMinBuildHeight() - 16) {
-            GestaltIllusionEvents.expire(this, false);
+            if (bodyDouble) { this.discard(); } else { GestaltIllusionEvents.expire(this, false); }
             return;
         }
 
-        // Redirect mob aggro every 20 ticks
-        if (ageTicks % 20 == 0 && ownerUuid != null) {
-            Player owner = level().getPlayerByUUID(ownerUuid);
-            if (owner != null) {
-                AABB range = getBoundingBox().inflate(24.0);
-                level().getEntitiesOfClass(Mob.class, range,
-                        mob -> mob.getTarget() == owner || mob.getTarget() == null)
-                        .forEach(mob -> mob.setTarget(this));
+        if (!bodyDouble) {
+            // Redirect mob aggro every 20 ticks (illusion mode only)
+            if (ageTicks % 20 == 0 && ownerUuid != null) {
+                Player owner = level().getPlayerByUUID(ownerUuid);
+                if (owner != null) {
+                    AABB range = getBoundingBox().inflate(24.0);
+                    level().getEntitiesOfClass(Mob.class, range,
+                            mob -> mob.getTarget() == owner || mob.getTarget() == null)
+                            .forEach(mob -> mob.setTarget(this));
+                }
             }
-        }
 
-        // Expire at lifetime
-        if (ageTicks >= GestaltCosts.ILLUSION_LIFETIME) {
-            GestaltIllusionEvents.expire(this, true);
+            // Expire at lifetime (illusion mode only; body double lifetime controlled by Phase Court)
+            if (ageTicks >= GestaltCosts.ILLUSION_LIFETIME) {
+                GestaltIllusionEvents.expire(this, true);
+            }
         }
     }
 
@@ -149,6 +198,13 @@ public class SpawnIllusionEntity extends PathfinderMob {
         super.defineSynchedData(builder);
         builder.define(DATA_AGE, 0);
         builder.define(DATA_OWNER_UUID_STR, "");
+        builder.define(DATA_BODY_DOUBLE_MODE, false);
+        builder.define(DATA_SLOT_MAINHAND, ItemStack.EMPTY);
+        builder.define(DATA_SLOT_OFFHAND,  ItemStack.EMPTY);
+        builder.define(DATA_SLOT_FEET,     ItemStack.EMPTY);
+        builder.define(DATA_SLOT_LEGS,     ItemStack.EMPTY);
+        builder.define(DATA_SLOT_CHEST,    ItemStack.EMPTY);
+        builder.define(DATA_SLOT_HEAD,     ItemStack.EMPTY);
     }
 
     @Override

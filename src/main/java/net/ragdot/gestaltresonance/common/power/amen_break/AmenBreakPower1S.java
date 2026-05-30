@@ -119,7 +119,25 @@ public final class AmenBreakPower1S {
         return PRIMEABLE_BLOCKS.contains(b);
     }
 
+    /** Called from Phase Court Break Core 1S — skips the primeable whitelist check. */
+    public static void activateBypassWhitelist(ServerPlayer player) {
+        activateInternal(player, true);
+    }
+
     public static void activate(ServerPlayer player) {
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (state.isPhaseCourtActive()) {
+            if (state.isBreakCoreUsed()) {
+                playFail(player);
+                return;
+            }
+            activateInternal(player, true);
+            return;
+        }
+        activateInternal(player, false);
+    }
+
+    private static void activateInternal(ServerPlayer player, boolean bypassPrimeableCheck) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
         if (!state.isSummoned()) {
@@ -164,7 +182,7 @@ public final class AmenBreakPower1S {
 
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         BlockState blockState = player.level().getBlockState(pos);
-        if (!isPrimeable(blockState)) {
+        if (!bypassPrimeableCheck && !isPrimeable(blockState)) {
             GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: block {} not primeable",
                     player.getName().getString(), blockState.getBlock().getDescriptionId());
             playFail(player);
@@ -175,9 +193,13 @@ public final class AmenBreakPower1S {
         if (hasCatalyst) heldItem.shrink(1);
         state.spendGestaltXp(xpCost);
         state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.POWER_1S_COOLDOWN);
+        if (bypassPrimeableCheck && state.isPhaseCourtActive()) {
+            state.setBreakCoreUsed(true);
+        }
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1S_COOLDOWN);
+        if (bypassPrimeableCheck) GestaltNetworking.syncPhaseCourtToPlayer(player);
 
         // Remove block and spawn primed entity
         Level level = player.level();

@@ -8,8 +8,13 @@
 
   "entity.gestaltresonance.body_double": "Body Double",
   "entity.gestaltresonance.phase_mine": "Phase Mine",
+  "entity.gestaltresonance.phase_blossom": "Phase Blossom",
   "entity.gestaltresonance.phase_afterimage": "Phase Afterimage",
   "entity.gestaltresonance.spawn_illusion": "Amen Break",
+  "entity.gestaltresonance.phase_court_double": "Phase Court Double",
+  "entity.gestaltresonance.primed_block": "Primed Block",
+  "entity.gestaltresonance.pop_pod": "Pop Pod",
+  "entity.gestaltresonance.drip_drop": "Drip Drop",
 
   "key.categories.gestaltresonance": "Gestalt Resonance",
   "key.gestaltresonance.summon_toggle": "Summon/Dismiss Gestalt",

@@ -75,6 +75,9 @@ public class AmenBreakModel extends GestaltModel {
     protected AnimationDefinition swimAnimation() { return AmenBreakAnimations.SWIM; }
 
     @Override
+    protected AnimationDefinition wallSlideAnimation() { return AmenBreakAnimations.WALL_SLIDE; }
+
+    @Override
     protected AnimationDefinition power1GAnimation() { return AmenBreakAnimations.POWER_1G; }
 
     public static LayerDefinition createBodyLayer() {

@@ -40,6 +40,7 @@ import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2S;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1B;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3B;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
 import net.ragdot.gestaltresonance.common.entity.PhaseBlossomEntity;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
@@ -151,9 +152,11 @@ public class GestaltResonance {
         AmenBreakPower2S.register();
         AmenBreakPower1B.register();
         AmenBreakPower3B.register();
+        AmenBreakPower3G.register();
         SpillwaysPower1B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
+        NeoForge.EVENT_BUS.register(AmenBreakPower3G.EVENT_LISTENER);
 
         // Config
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -200,8 +203,9 @@ public class GestaltResonance {
                 GestaltSoulProjectionEvents.teardown(player, SoulProjectionExitType.CLEAN, null, 0f);
                 state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             }
-            // Disarm Phase Out on logout — armed state should not survive reconnect.
+            // Disarm Phase Out and Phase Court on logout — state should not survive reconnect.
             AmenBreakPower2G.disarm(player);
+            AmenBreakPower3G.disarm(player);
             if (state.isSummoned()) {
                 // Deactivate passive before clearing summon
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
@@ -231,6 +235,7 @@ public class GestaltResonance {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
         AmenBreakPower2G.disarm(player);
+        AmenBreakPower3G.disarm(player);
         PhaseBlossomEntity.dismissBlossom(player.serverLevel(), player.getUUID());
 
         // copyOnDeath() preserved summoned=true — dismiss cleanly so the first G press summons.
@@ -254,6 +259,19 @@ public class GestaltResonance {
         GestaltNetworking.syncUnlockedSkinsToOwner(player);
     }
 
+    /** Re-sync all client-side state after a dimension change — the client resets attachments on portal. */
+    @SubscribeEvent
+    public void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        GestaltNetworking.syncToTracking(player);
+        GestaltNetworking.syncGestaltXpToPlayer(player);
+        GestaltNetworking.syncResonanceToPlayer(player);
+        GestaltNetworking.syncSelectedSkinToTracking(player);
+        GestaltNetworking.syncUnlockedSkinsToOwner(player);
+        GestaltNetworking.syncPhaseOutToPlayer(player);
+        GestaltNetworking.syncPhaseCourtToPlayer(player);
+    }
+
     /** When a player starts tracking another player, sync the tracked player's gestalt state. */
     @SubscribeEvent
     public void onStartTracking(PlayerEvent.StartTracking event) {
@@ -274,8 +292,15 @@ public class GestaltResonance {
             GestaltSoulProjectionEvents.tickSoulProjection(player);
             AmenBreakPower1G.tick(player);
             AmenBreakPower2G.tick(player);
+            AmenBreakPower3G.tick(player);
 
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            if (player.isCreative()) {
+                long now = server.getTickCount();
+                if (state.clampAllCooldownsForCreative(now)) {
+                    player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+                }
+            }
             if (state.isSummoned()) {
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
                 if (passive != null) {

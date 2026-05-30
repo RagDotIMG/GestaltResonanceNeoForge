@@ -34,6 +34,7 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
 
@@ -102,6 +103,8 @@ public class GestaltNetworking {
         // Phase Out (Power 2G)
         registrar.playToServer(PhaseOutToggleC2S.TYPE, PhaseOutToggleC2S.STREAM_CODEC, GestaltNetworking::handlePhaseOutToggle);
         registrar.playToClient(PhaseOutStateSyncS2C.TYPE, PhaseOutStateSyncS2C.STREAM_CODEC, GestaltNetworking::handlePhaseOutStateSync);
+        // Phase Court (Power 3G)
+        registrar.playToClient(SyncPhaseCourtS2C.TYPE, SyncPhaseCourtS2C.STREAM_CODEC, GestaltNetworking::handleSyncPhaseCourt);
     }
 
     private static void handleAttackInput(AttackInputC2S packet, IPayloadContext ctx) {
@@ -850,6 +853,37 @@ public class GestaltNetworking {
 
     /** Client-side callback invoked when Phase Out state changes. */
     public static java.util.function.Consumer<PhaseOutStateSyncS2C> onPhaseOutStateCallback = null;
+
+    // ── Phase Court (Power 3G) ────────────────────────────────────────────────
+
+    public static java.util.function.Consumer<SyncPhaseCourtS2C> onPhaseCourtStateCallback = null;
+
+    private static void handleSyncPhaseCourt(SyncPhaseCourtS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            net.minecraft.world.entity.player.Player player = ctx.player();
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            state.setPhaseCourtActive(packet.active());
+            state.setPhaseCourtTicksRemaining(packet.ticksRemaining());
+            state.setBreakCoreUsed(packet.breakCoreUsed());
+            state.setPhaseCourtCooldownTicks(packet.cooldownTicks());
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            if (onPhaseCourtStateCallback != null) {
+                onPhaseCourtStateCallback.accept(packet);
+            }
+        });
+    }
+
+    /** Send the current Phase Court state to the owning player's client. */
+    public static void syncPhaseCourtToPlayer(ServerPlayer serverPlayer) {
+        PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        PacketDistributor.sendToPlayer(serverPlayer,
+                new SyncPhaseCourtS2C(
+                        state.isPhaseCourtActive(),
+                        state.getPhaseCourtTicksRemaining(),
+                        state.isBreakCoreUsed(),
+                        state.getPhaseCourtCooldownTicks(),
+                        state.getPhaseCourtPostHitTick() > 0));
+    }
 
     /** Send the current Phase Out state to the owning player's client. */
     public static void syncPhaseOutToPlayer(ServerPlayer serverPlayer) {

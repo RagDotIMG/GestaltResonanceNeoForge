@@ -61,6 +61,9 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
     /** Optional — return null if this gestalt doesn't support a swim pose. */
     @Nullable protected AnimationDefinition swimAnimation() { return null; }
 
+    /** Optional — return null if this gestalt doesn't support a wall-slide pose. */
+    @Nullable protected AnimationDefinition wallSlideAnimation() { return null; }
+
     /** Optional — return null if this gestalt doesn't support the 1G power animation. */
     @Nullable protected AnimationDefinition power1GAnimation() { return null; }
 
@@ -127,6 +130,8 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         data.wasThrowing = false;
         data.wasSwimming = false;
         data.wasLedgeGrabbing = false;
+        data.wasWallSliding = false;
+        data.wallSlideState.stop();
     }
 
     @Override
@@ -147,8 +152,9 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         // ── Phase 1: cache animation definitions and compute all flags ───────
 
         AnimationDefinition intro      = introAnimation();
-        AnimationDefinition grabAnim   = grabAnimation();
-        AnimationDefinition power1GAnim = power1GAnimation();
+        AnimationDefinition grabAnim      = grabAnimation();
+        AnimationDefinition wallSlideAnim = wallSlideAnimation();
+        AnimationDefinition power1GAnim   = power1GAnimation();
         AnimationDefinition windupAnim = windupAnimation();
         AnimationDefinition miningAnim = miningAnimation();
         AnimationDefinition guardAnim  = guardAnimation();
@@ -162,6 +168,7 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         AnimationDefinition hitAnim = isHitAction ? getHitAnimation(action) : null;
 
         boolean ledgeGrabbing = state.isLedgeGrabbing();
+        boolean wallSliding   = action == GestaltAction.WALL_SLIDE;
         boolean guarding      = action == GestaltAction.GUARD;
         boolean throwing      = action == GestaltAction.THROW;
         boolean swimming      = player.isSwimming();
@@ -199,6 +206,14 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
             data.grabState.stop();
         }
         data.wasLedgeGrabbing = ledgeGrabbing;
+
+        // Wall slide — level-triggered like ledge grab (static hold pose)
+        if (wallSliding && wallSlideAnim != null && !data.wallSlideState.isStarted()) {
+            data.wallSlideState.start((int) ageInTicks);
+        } else if (!wallSliding && data.wasWallSliding && data.wallSlideState.isStarted()) {
+            data.wallSlideState.stop();
+        }
+        data.wasWallSliding = wallSliding;
 
         // Hit chain
         if (isHitAction && hitAnim != null) {
@@ -276,6 +291,12 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
             return;
         }
 
+        if (wallSliding && wallSlideAnim != null && data.wallSlideState.isStarted()) {
+            data.wallSlideState.updateTime(ageInTicks, 1.0F);
+            this.animate(data.wallSlideState, wallSlideAnim, ageInTicks);
+            return;
+        }
+
         if (isHitAction && hitAnim != null) {
             data.hitState.updateTime(ageInTicks, 1.0F);
             this.animate(data.hitState, hitAnim, ageInTicks);
@@ -340,7 +361,8 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         final AnimationState idleState   = new AnimationState();
         final AnimationState guardState  = new AnimationState();
         final AnimationState throwState  = new AnimationState();
-        final AnimationState grabState   = new AnimationState();
+        final AnimationState grabState       = new AnimationState();
+        final AnimationState wallSlideState  = new AnimationState();
         final AnimationState miningState = new AnimationState();
         final AnimationState hitState    = new AnimationState();
         final AnimationState windupState = new AnimationState();
@@ -351,6 +373,7 @@ public abstract class GestaltModel extends HierarchicalModel<AbstractClientPlaye
         boolean wasGuarding       = false;
         boolean wasThrowing       = false;
         boolean wasLedgeGrabbing  = false;
+        boolean wasWallSliding    = false;
         boolean wasMining         = false;
         boolean wasSwimming       = false;
         GestaltAction prevHitAction = GestaltAction.IDLE;

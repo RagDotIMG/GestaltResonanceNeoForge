@@ -29,6 +29,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.ragdot.gestaltresonance.client.GestaltCooldownHud;
 import net.ragdot.gestaltresonance.client.GestaltStatusHud;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
+import net.ragdot.gestaltresonance.client.PhaseCourtClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientInput;
 import net.ragdot.gestaltresonance.client.entity.BodyDoubleRenderer;
@@ -52,6 +53,7 @@ import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.network.PhaseOutStateSyncS2C;
+import net.ragdot.gestaltresonance.common.network.SyncPhaseCourtS2C;
 
 @Mod(value = GestaltResonance.MODID, dist = Dist.CLIENT)
 public class GestaltResonanceClient {
@@ -85,6 +87,9 @@ public class GestaltResonanceClient {
         NeoForge.EVENT_BUS.addListener(GestaltResonanceHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(GestaltStatusHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientHandler::onCameraAngles);
+        NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onFogColor);
+        NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderFog);
+        NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderGui);
         // Soul projection client-side input gating (block break/place/use) and movement prediction
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onLeftClickBlock);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickBlock);
@@ -118,6 +123,9 @@ public class GestaltResonanceClient {
 
         // Bridge: Phase Out state change → activation shake when ghost window starts.
         GestaltNetworking.onPhaseOutStateCallback = GestaltResonanceClient::onPhaseOutState;
+
+        // Bridge: Phase Court post-hit freeze starts → screen shake.
+        GestaltNetworking.onPhaseCourtStateCallback = GestaltResonanceClient::onPhaseCourtState;
 
         // Bridge: local player's gestalt crash → status icon cooldown fill.
         GestaltNetworking.onSelfCrashCallback = GestaltStatusHud::onSelfCrash;
@@ -226,5 +234,14 @@ public class GestaltResonanceClient {
         }
         prevPhaseOutActive = packet.active();
         GestaltResonanceHud.onPhaseOutState(packet);
+    }
+
+    private static boolean prevPhaseCourtFreezeActive = false;
+
+    private static void onPhaseCourtState(SyncPhaseCourtS2C packet) {
+        if (packet.postHitFreezeActive() && !prevPhaseCourtFreezeActive) {
+            SoulProjectionClientHandler.triggerActivationShake();
+        }
+        prevPhaseCourtFreezeActive = packet.postHitFreezeActive();
     }
 }

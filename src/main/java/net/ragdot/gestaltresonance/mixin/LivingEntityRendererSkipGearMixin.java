@@ -41,7 +41,8 @@ public abstract class LivingEntityRendererSkipGearMixin {
                                                   float f4, float f5, float f6) {
         if (entity instanceof Player p) {
             PlayerGestaltState state = p.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-            if (state.isSoulProjecting() && gestaltresonance$isGearLayer(layer)) {
+            if ((state.isSoulProjecting() || state.isPhaseCourtActive() || state.isPhaseOutActive())
+                    && gestaltresonance$isGearLayer(layer)) {
                 return;
             }
         }

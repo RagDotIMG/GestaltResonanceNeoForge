@@ -128,7 +128,10 @@ public class GestaltGuardEvents {
     private static void cancelIfGuarding(net.neoforged.bus.api.ICancellableEvent event, Player player) {
         if (event.isCanceled()) return;
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (state.isSummoned() && state.isGuarding()) {
+        if (!state.isSummoned()) return;
+        GestaltAction action = state.getAction();
+        if (state.isGuarding()
+                || action == GestaltAction.CHARGED_STRIKE_WINDUP) {
             event.setCanceled(true);
         }
     }

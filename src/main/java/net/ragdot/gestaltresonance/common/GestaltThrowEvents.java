@@ -98,7 +98,7 @@ public class GestaltThrowEvents {
         throwProtectionTickMap.put(player.getUUID(), (long) player.getServer().getTickCount());
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.THROW);
         player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.SNOWBALL_THROW, SoundSource.PLAYERS, 0.5f, 1.0f);
+                SoundEvents.SNOWBALL_THROW, SoundSource.PLAYERS, 0.5f, 0.5f);
 
         throwTimerMap.put(player.getUUID(), THROW_DURATION_TICKS);
     }

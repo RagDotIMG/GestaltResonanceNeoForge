@@ -176,6 +176,14 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         float progress = state.getSummonProgress(partialTick);
 
+        // Ghost opacity: kept separate from progress so the >= 0.999f fully-summoned
+        // check is unaffected — multiplying progress into opacity would route the gestalt
+        // through the jitter VFX path instead of the clean fully-summoned path.
+        float ghostAlpha = 1.0f;
+        if (state.isPhaseCourtActive())    ghostAlpha = GestaltCosts.PHASE_COURT_GHOST_ALPHA / 255.0f;
+        else if (state.isPhaseOutActive()) ghostAlpha = 0x33 / 255.0f;
+        else if (state.isSoulProjecting()) ghostAlpha = 0x4C / 255.0f;
+
         // Fully hidden — don't render at all
         if (progress <= 0.001f) return;
 
@@ -195,7 +203,9 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
 
         float xOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_X : attacking ? ATTACK_OFFSET_X : (guarding || mining) ? GUARD_OFFSET_X : OFFSET_X;
         float yOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_Y : OFFSET_Y;
-        float zOffset = (grabbing || wallSliding) ? LEDGE_GRAB_OFFSET_Z : attacking ? ATTACK_OFFSET_Z : (guarding || mining) ? GUARD_OFFSET_Z : OFFSET_Z;
+        // Wall slide Z=0: midpoint between +LEDGE_GRAB_OFFSET_Z (clips into wall) and
+        // -LEDGE_GRAB_OFFSET_Z (too far out) due to the 180° yaw correction flipping the axis.
+        float zOffset = grabbing ? LEDGE_GRAB_OFFSET_Z : wallSliding ? 0.0F : attacking ? ATTACK_OFFSET_Z : (guarding || mining) ? GUARD_OFFSET_Z : OFFSET_Z;
 
         float[] shake = getShakeOffset(player.getUUID(), player.level().getGameTime(), partialTick);
         xOffset += shake[0];
@@ -217,7 +227,8 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
             float ledgeYaw = directionToYaw(state.getLedgeFace());
             yawCorrection = ledgeYaw - bodyYaw;
         } else if (wallSliding && state.getWallSlideFace() != null) {
-            float slideYaw = directionToYaw(state.getWallSlideFace());
+            // +180° flips from facing into the wall (ledge-grab style) to facing away from it.
+            float slideYaw = directionToYaw(state.getWallSlideFace()) + 180F;
             yawCorrection = slideYaw - bodyYaw;
         } else if (attacking) {
             yawCorrection = netHeadYaw + 20F;
@@ -251,13 +262,13 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset, yOffset, zOffset);
-            renderGestaltModel(poseStack, vc, packedLight, 0.9f, model);
+            renderGestaltModel(poseStack, vc, packedLight, 0.9f * ghostAlpha, model);
             poseStack.popPose();
             return;
         }
 
         renderGestaltWithSummonVfx(poseStack, bufferSource, packedLight, player, partialTick,
-                progress, xOffset, yOffset, zOffset, yawCorrection, pitchCorrection, model);
+                progress, xOffset, yOffset, zOffset, yawCorrection, pitchCorrection, model, ghostAlpha);
     }
 
     /**
@@ -270,7 +281,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                                             int packedLight, AbstractClientPlayer player,
                                             float partialTick, float progress, float xOffset,
                                             float yOffset, float zOffset, float yawCorrection,
-                                            float pitchCorrection, GestaltModel model) {
+                                            float pitchCorrection, GestaltModel model, float ghostAlpha) {
 
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         boolean crashing = state.isCrashingOut();
@@ -305,7 +316,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
             float dz = (float) Math.sin(seed * 1.1f) * maxOffset;
 
             // Alpha per pass: spread baseAlpha across all passes with a 0.35 factor
-            float alpha = baseAlpha * (0.35f / passes);
+            float alpha = baseAlpha * (0.35f / passes) * ghostAlpha;
 
             poseStack.pushPose();
             if (yawCorrection != 0) {
@@ -329,7 +340,7 @@ public class GestaltPlayerLayer extends RenderLayer<AbstractClientPlayer, Player
                 poseStack.mulPose(Axis.XP.rotationDegrees(pitchCorrection));
             }
             poseStack.translate(xOffset, yOffset, zOffset);
-            renderGestaltModel(poseStack, vertexConsumer, packedLight, baseAlpha, model);
+            renderGestaltModel(poseStack, vertexConsumer, packedLight, baseAlpha * ghostAlpha, model);
             poseStack.popPose();
         }
     }

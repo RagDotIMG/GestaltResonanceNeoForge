@@ -41,6 +41,13 @@ public final class AmenBreakPower1B {
     public static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        // Phase Court Break Core 1B dispatch
+        if (state.isPhaseCourtActive()) {
+            if (state.isBreakCoreUsed()) { playFail(player); return; }
+            AmenBreakPower3G.activateBreakCore1B(player);
+            return;
+        }
+
         if (!state.isSummoned()) return;
         if (!state.isAwakened()) return;
         if (state.getAction() != GestaltAction.IDLE) return;

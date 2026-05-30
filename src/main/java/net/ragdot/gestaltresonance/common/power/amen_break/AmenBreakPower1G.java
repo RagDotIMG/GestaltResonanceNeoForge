@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
@@ -22,6 +23,7 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltDamageTypes;
 import net.ragdot.gestaltresonance.common.GestaltExplosionUtil;
 import net.ragdot.gestaltresonance.common.GestaltIds;
+import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
@@ -57,6 +59,12 @@ public final class AmenBreakPower1G {
     public static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        // Phase Court Break Core 1G dispatch (guard allowed; QK windup is allowed during Phase Court)
+        if (state.isPhaseCourtActive()) {
+            if (state.isBreakCoreUsed()) return;
+            // Fall through to standard 1G activate — QK checks (guard, XP, level, cooldown) still apply
+        }
+
         // Guard chord requires actually guarding right now. (Modifier was already matched
         // for dispatch — but state may have changed between client press and server handle.)
         if (!state.isSummoned()) return;
@@ -66,8 +74,8 @@ public final class AmenBreakPower1G {
         if (state.getAction() != GestaltAction.GUARD) return;
 
         long currentTick = player.getServer().getTickCount();
-        if (state.hasPowerCooldown(KEY.slot(), KEY.modifier(), currentTick)) return;
-        if (state.getTotalGestaltXp() < GestaltCosts.POWER_1G_XP_COST) return;
+        if (state.hasPowerCooldown(KEY.slot(), KEY.modifier(), currentTick)) { playFail(player); return; }
+        if (state.getTotalGestaltXp() < GestaltCosts.POWER_1G_XP_COST) { playFail(player); return; }
 
         // Drop guard and pay costs (may de-level if within-level XP is insufficient)
         state.clearGuard(); // sets currentAction = IDLE
@@ -155,6 +163,11 @@ public final class AmenBreakPower1G {
     // ── Hit + mark ────────────────────────────────────────────────────────────
 
     private static void onHit(ServerPlayer player, LivingEntity target, PlayerGestaltState state) {
+        // Phase Court Break Core 1G redirect
+        if (state.isPhaseCourtActive()) {
+            AmenBreakPower3G.onBreakCore1GHit(player, target, state);
+            return;
+        }
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         int strength = stats != null ? stats.strength() : 1;
         int clamped = Math.max(1, Math.min(strength, GestaltAttackEvents.BASE_DAMAGE_BY_STRENGTH.length - 1));
@@ -229,5 +242,9 @@ public final class AmenBreakPower1G {
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.IDLE);
         GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G aborted (took damage) for {}", player.getName().getString());
         // Cooldown stays set — no refund.
+    }
+
+    private static void playFail(ServerPlayer player) {
+        player.playNotifySound(GestaltSounds.GESTALT_FAIL.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
     }
 }

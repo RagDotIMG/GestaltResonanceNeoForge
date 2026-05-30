@@ -35,7 +35,7 @@ public class WallSlideLogic {
     private static final double MAX_SPEED          = 0.8;
     private static final double CONSTANT_PHASE_END = 2.5;
     private static final double ACCEL_END          = 10.0;
-    private static final double MAX_DISTANCE       = 13.0;
+    private static final double MAX_DISTANCE       = 11.0;
 
     private static final Direction[] HORIZONTAL_DIRS = {
             Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
@@ -59,6 +59,7 @@ public class WallSlideLogic {
         if (!state.isSummoned()) return;
         if (state.getAction() != GestaltAction.IDLE) return;
         if (player.onGround() || player.isInWater() || player.isSwimming()) return;
+        if (player.onClimbable()) return;
         if (state.isLedgeGrabbing()) return;
         if (!state.canAttachToWall()) return;
         if (player.getDeltaMovement().y >= 0) return;
@@ -79,8 +80,9 @@ public class WallSlideLogic {
         if (!state.isSummoned()) { abortSlide(player, state, true); return; }
         // Abort: sneak released
         if (!player.isShiftKeyDown()) { abortSlide(player, state, true); return; }
-        // Abort: in water
+        // Abort: in water or on a climbable block
         if (player.isInWater() || player.isSwimming()) { abortSlide(player, state, true); return; }
+        if (player.onClimbable()) { abortSlide(player, state, true); return; }
         // Abort: on ground
         if (player.onGround()) { abortSlide(player, state, true); return; }
 

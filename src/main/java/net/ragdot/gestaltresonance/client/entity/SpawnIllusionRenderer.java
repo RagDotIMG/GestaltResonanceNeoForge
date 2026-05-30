@@ -1,21 +1,19 @@
 package net.ragdot.gestaltresonance.client.entity;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.HumanoidArmorModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
-
-import com.mojang.blaze3d.vertex.PoseStack;
 
 import java.util.UUID;
 
@@ -25,15 +23,11 @@ public class SpawnIllusionRenderer
 
     public SpawnIllusionRenderer(EntityRendererProvider.Context context) {
         super(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5f);
-    }
-
-    @Override
-    public void render(SpawnIllusionEntity entity, float yaw, float partialTick,
-                       PoseStack poseStack, MultiBufferSource buffer, int light) {
-        float alpha = computeAlpha(entity.getAgeTicks());
-        RenderSystem.setShaderColor(0.26f, 0.07f, 0.52f, alpha);
-        super.render(entity, yaw, partialTick, poseStack, buffer, light);
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        addLayer(new HumanoidArmorLayer<>(this,
+                new HumanoidArmorModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+                new HumanoidArmorModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+                context.getModelManager()));
+        addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
     }
 
     @Override
@@ -54,17 +48,5 @@ public class SpawnIllusionRenderer
             }
         }
         return DefaultPlayerSkin.getDefaultTexture();
-    }
-
-    private static float computeAlpha(int age) {
-        if (age < GestaltCosts.ILLUSION_FADE_START) {
-            return GestaltCosts.ILLUSION_BASE_OPACITY;
-        } else if (age < GestaltCosts.ILLUSION_FADE_START + GestaltCosts.ILLUSION_FADE_DURATION) {
-            float t = (age - GestaltCosts.ILLUSION_FADE_START) / (float) GestaltCosts.ILLUSION_FADE_DURATION;
-            return GestaltCosts.ILLUSION_BASE_OPACITY
-                    - t * (GestaltCosts.ILLUSION_BASE_OPACITY - GestaltCosts.ILLUSION_FADE_OPACITY);
-        } else {
-            return GestaltCosts.ILLUSION_FADE_OPACITY;
-        }
     }
 }

@@ -48,6 +48,7 @@ public final class AmenBreakPower3B {
     private static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        if (state.isPhaseCourtActive()) { playFail(player); return; }
         if (!state.isSummoned() || !state.isAwakened()) { playFail(player); return; }
         if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[2][0]) { playFail(player); return; }
 
@@ -56,7 +57,7 @@ public final class AmenBreakPower3B {
 
         if (!(player.level() instanceof ServerLevel sl)) return;
 
-        Optional<PhaseBlossomEntity> existing = PhaseBlossomEntity.findBlossom(sl, player.getUUID());
+        Optional<PhaseBlossomEntity> existing = PhaseBlossomEntity.findBlossomGlobal(player.getServer(), player.getUUID());
 
         if (existing.isPresent()) {
             // ── Dismiss path (free) ──────────────────────────────────────────
