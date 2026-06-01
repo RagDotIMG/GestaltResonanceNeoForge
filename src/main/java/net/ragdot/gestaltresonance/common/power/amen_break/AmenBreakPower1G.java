@@ -59,6 +59,8 @@ public final class AmenBreakPower1G {
     public static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        if (state.isTimePhaseActive()) return;
+
         // Phase Court Break Core 1G dispatch (guard allowed; QK windup is allowed during Phase Court)
         if (state.isPhaseCourtActive()) {
             if (state.isBreakCoreUsed()) return;
@@ -71,6 +73,13 @@ public final class AmenBreakPower1G {
         if (!state.isAwakened()) return;
         if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[0][2]) return;
         if (!state.isGuarding()) return;
+
+        // Remote detonation: if a mark is already implanted (outside Phase Court), trigger it now.
+        if (!state.isPhaseCourtActive() && state.getMarkedEntityId() >= 0) {
+            remoteDetonate(player, state);
+            return;
+        }
+
         if (state.getAction() != GestaltAction.GUARD) return;
 
         long currentTick = player.getServer().getTickCount();
@@ -96,6 +105,31 @@ public final class AmenBreakPower1G {
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1G_COOLDOWN_TICKS);
 
         GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G activated for {}", player.getName().getString());
+    }
+
+    // ── Remote detonation ────────────────────────────────────────────────────
+
+    private static void remoteDetonate(ServerPlayer player, PlayerGestaltState state) {
+        Entity entity = player.level().getEntity(state.getMarkedEntityId());
+
+        // If the entity is already dead, detonate at last known position immediately (no shake possible)
+        if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
+            Vec3 fallback = state.getMarkedEntityLastPos();
+            if (fallback != null) detonate(player, fallback);
+            state.clearMark();
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            return;
+        }
+
+        // Arm the fuse — tickMark() shakes the mob and fires at 0
+        player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                net.minecraft.sounds.SoundEvents.FLINTANDSTEEL_USE,
+                SoundSource.PLAYERS, 1.0f, 1.0f);
+        player.level().playSound(null, living.getX(), living.getY(), living.getZ(),
+                net.minecraft.sounds.SoundEvents.CREEPER_PRIMED,
+                SoundSource.HOSTILE, 1.0f, 1.0f);
+        state.setMarkedEntityTicksRemaining(GestaltCosts.POWER_1G_DETONATION_DELAY);
+        player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
     }
 
     // ── Per-tick logic ────────────────────────────────────────────────────────
@@ -136,26 +170,29 @@ public final class AmenBreakPower1G {
     private static void tickMark(ServerPlayer player, PlayerGestaltState state) {
         Entity entity = player.level().getEntity(state.getMarkedEntityId());
 
-        // If the entity vanished or died, fire at the last known position
+        // If the entity vanished or died, fire at the last known position (no shake possible)
         if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
             Vec3 fallback = state.getMarkedEntityLastPos();
-            if (fallback != null) {
-                detonate(player, fallback);
-            }
+            if (fallback != null) detonate(player, fallback);
             state.clearMark();
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             return;
         }
 
-        // Track current position in case the entity dies mid-tick before the next pass
+        // Track current position in case the entity dies between ticks
         state.setMarkedEntityLastPos(living.position());
 
-        int remaining = state.getMarkedEntityTicksRemaining() - 1;
-        if (remaining <= 0) {
-            detonate(player, living.position());
-            state.clearMark();
-        } else {
-            state.setMarkedEntityTicksRemaining(remaining);
+        int remaining = state.getMarkedEntityTicksRemaining();
+        if (remaining > 0) {
+            // Fuse armed: apply continuous red-flash shake on the mob each tick
+            living.hurtTime = 10;
+            remaining--;
+            if (remaining <= 0) {
+                detonate(player, living.position().add(0, living.getBbHeight() * 0.5, 0));
+                state.clearMark();
+            } else {
+                state.setMarkedEntityTicksRemaining(remaining);
+            }
         }
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
     }
@@ -183,7 +220,6 @@ public final class AmenBreakPower1G {
         // Mark for delayed explosion. If the hit killed the target, tickMark will detect
         // !isAlive() next tick and detonate at the last-known (death) position.
         state.setMarkedEntityId(target.getId());
-        state.setMarkedEntityTicksRemaining(GestaltCosts.POWER_1G_EXPLOSION_DELAY);
         state.setMarkedEntityLastPos(target.position());
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
     }

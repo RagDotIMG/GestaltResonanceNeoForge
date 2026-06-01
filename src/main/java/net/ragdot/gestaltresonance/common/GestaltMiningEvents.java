@@ -71,6 +71,7 @@ public class GestaltMiningEvents {
     @SubscribeEvent
     public void onBreakSpeed(PlayerEvent.BreakSpeed event) {
         Player player = event.getEntity();
+        if (player.isCreative()) return;
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
 
@@ -100,6 +101,7 @@ public class GestaltMiningEvents {
     @SubscribeEvent
     public void onBlockBreak(BlockEvent.BreakEvent event) {
         if (!(event.getPlayer() instanceof ServerPlayer player)) return;
+        if (player.isCreative()) return;
 
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;

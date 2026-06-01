@@ -87,7 +87,7 @@ public class PopSproutBlock extends BushBlock implements EntityBlock {
             be.detonate((ServerLevel) level, pos);
         } else {
             // Fallback: no block entity data available
-            Vec3 center = Vec3.atCenterOf(pos);
+            Vec3 center = new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
             level.removeBlock(pos, false);
             GestaltExplosionUtil.detonate(level, center,
                     GestaltCosts.POWER_1B_EXPLOSION_BASE_RADIUS,
@@ -133,7 +133,7 @@ public class PopSproutBlock extends BushBlock implements EntityBlock {
         if (level.getBlockEntity(pos) instanceof PopSproutBlockEntity be) {
             be.detonate((ServerLevel) level, pos);
         } else {
-            Vec3 center = Vec3.atCenterOf(pos);
+            Vec3 center = new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
             level.removeBlock(pos, false);
             GestaltExplosionUtil.detonate(level, center,
                     GestaltCosts.POWER_1B_EXPLOSION_BASE_RADIUS,

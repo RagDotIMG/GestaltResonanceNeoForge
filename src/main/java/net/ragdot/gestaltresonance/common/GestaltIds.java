@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 public final class GestaltIds {
     public static final ResourceLocation AMEN_BREAK  = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "amen_break");
     public static final ResourceLocation SPILLWAYS   = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "spillways");
+    public static final ResourceLocation FLOAT_PLAY = ResourceLocation.fromNamespaceAndPath("gestaltresonance", "float_play");
 
     private GestaltIds() {}
 }

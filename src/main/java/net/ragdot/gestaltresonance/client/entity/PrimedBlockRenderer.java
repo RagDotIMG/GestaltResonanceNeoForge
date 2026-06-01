@@ -39,7 +39,8 @@ public class PrimedBlockRenderer extends EntityRenderer<PrimedBlockEntity> {
         poseStack.rotateAround(Axis.YP.rotationDegrees(-90.0F), 0.0F, 1.0F, 0.0F);
         poseStack.translate(-0.5, -0.5, 0.5);
         poseStack.rotateAround(Axis.YP.rotationDegrees(90.0F), 0.0F, 1.0F, 0.0F);
-        TntMinecartRenderer.renderWhiteSolidBlock(this.blockRenderer, entity.getBlockState(), poseStack, buffer, packedLight, i / 5 % 2 == 0);
+        boolean flash = !entity.isSuppressFlash() && i / 5 % 2 == 0;
+        TntMinecartRenderer.renderWhiteSolidBlock(this.blockRenderer, entity.getBlockState(), poseStack, buffer, packedLight, flash);
         poseStack.popPose();
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }

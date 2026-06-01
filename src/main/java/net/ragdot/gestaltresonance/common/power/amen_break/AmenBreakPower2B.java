@@ -36,6 +36,7 @@ public final class AmenBreakPower2B {
     private static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        if (state.isTimePhaseActive()) { playFail(player); return; }
         if (state.isPhaseCourtActive()) { playFail(player); return; }
         if (!state.isSummoned() || !state.isAwakened()) { playFail(player); return; }
         if (state.isSoulProjecting()) { playFail(player); return; }

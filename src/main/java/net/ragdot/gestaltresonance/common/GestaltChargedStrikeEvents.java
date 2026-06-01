@@ -54,6 +54,7 @@ public class GestaltChargedStrikeEvents {
     public static void handleStart(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
+        if (state.isTimePhaseActive()) return;
         if (state.isPhaseCourtActive()) return;
         if (state.getAction() != GestaltAction.GUARD) return;
 

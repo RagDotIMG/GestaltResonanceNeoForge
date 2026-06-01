@@ -8,6 +8,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * with a Soul Vessel (Fragile). The seedTypeKey stores the entity type
  * registry key (e.g. "minecraft:zombie") so the resulting gestalt
  * reflects the mob type.
+ * [RAG]: to assign new mob pairings check GestaltMappings.java
  */
 public class MobSeededData {
 

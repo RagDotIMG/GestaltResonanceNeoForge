@@ -46,7 +46,7 @@ public final class GestaltSkinRegistry {
                         Component.literal("Recolor III"), tex("amen_break/alt3"), null),
                 new GestaltSkin(skinId("amen_break", "biome"),
                         Component.literal("Biome"), tex("amen_break/biome"),
-                        new SkinUnlockCondition.VisitBiome(Biomes.SWAMP)),
+                        new SkinUnlockCondition.VisitBiome(Biomes.JUNGLE)),
                 new GestaltSkin(skinId("amen_break", "trial"),
                         Component.literal("Trial"), tex("amen_break/trial"),
                         new SkinUnlockCondition.LootVault()),
@@ -68,7 +68,31 @@ public final class GestaltSkinRegistry {
         ResourceLocation spillways = ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "spillways");
         SKINS.put(spillways, List.of(
                 new GestaltSkin(skinId("spillways", "default"),
-                        Component.literal("Default"), tex("spillways/default"), null)
+                        Component.literal("Default"), tex("spillways/default"), null),
+                new GestaltSkin(skinId("spillways", "alt"),
+                        Component.literal("Recolor I"), tex("spillways/alt"), null),
+                new GestaltSkin(skinId("spillways", "alt2"),
+                        Component.literal("Recolor II"), tex("spillways/alt2"), null),
+                new GestaltSkin(skinId("spillways", "alt3"),
+                        Component.literal("Recolor III"), tex("spillways/alt3"), null),
+                new GestaltSkin(skinId("spillways", "biome"),
+                        Component.literal("Biome"), tex("spillways/biome"),
+                        new SkinUnlockCondition.VisitBiome(Biomes.MUSHROOM_FIELDS)),
+                new GestaltSkin(skinId("spillways", "trial"),
+                        Component.literal("Trial"), tex("spillways/trial"),
+                        new SkinUnlockCondition.LootVault()),
+                new GestaltSkin(skinId("spillways", "penrose"),
+                        Component.literal("Penrose"), tex("spillways/penrose"),
+                        new SkinUnlockCondition.PickUpItem(Items.CHORUS_FLOWER)),
+                new GestaltSkin(skinId("spillways", "warden"),
+                        Component.literal("Warden"), tex("spillways/warden"),
+                        new SkinUnlockCondition.KillMob(EntityType.WARDEN)),
+                new GestaltSkin(skinId("spillways", "glitch"),
+                        Component.literal("Glitch"), tex("spillways/glitch"),
+                        new SkinUnlockCondition.GestaltCrashCount(50)),
+                new GestaltSkin(skinId("spillways", "mastery"),
+                        Component.literal("Mastery"), tex("spillways/mastery"),
+                        new SkinUnlockCondition.GestaltLevel(15))
         ));
     }
 

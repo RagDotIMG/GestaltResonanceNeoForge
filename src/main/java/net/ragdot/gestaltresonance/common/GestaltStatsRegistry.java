@@ -16,6 +16,9 @@ public final class GestaltStatsRegistry {
         STATS.put(GestaltIds.AMEN_BREAK, new GestaltStats(3, 3, 3, 2, 1));
         // Strength 2 | Speed 3 | Durability 2 | Range 4 | Resonance 5
         STATS.put(GestaltIds.SPILLWAYS,  new GestaltStats(2, 3, 2, 4, 5));
+        // Strength 0 | Speed 3 | Durability 2 | Range 6 | Resonance 4
+        STATS.put(GestaltIds.FLOAT_PLAY,  new GestaltStats(0, 3, 2, 6, 4));
+
     }
 
     @Nullable

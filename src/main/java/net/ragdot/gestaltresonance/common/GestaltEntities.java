@@ -15,6 +15,8 @@ import net.ragdot.gestaltresonance.common.entity.PhaseMineEntity;
 import net.ragdot.gestaltresonance.common.entity.PopPodEntity;
 import net.ragdot.gestaltresonance.common.entity.PrimedBlockEntity;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
+import net.ragdot.gestaltresonance.common.entity.TearProjectileEntity;
+import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 
 public class GestaltEntities {
 
@@ -84,8 +86,26 @@ public class GestaltEntities {
                             .updateInterval(20)
                             .build("phase_blossom"));
 
+    public static final DeferredHolder<EntityType<?>, EntityType<TearProjectileEntity>> TEAR_PROJECTILE =
+            ENTITY_TYPES.register("tear_projectile", () ->
+                    EntityType.Builder.<TearProjectileEntity>of(TearProjectileEntity::new, MobCategory.MISC)
+                            .fireImmune()
+                            .sized(0.25f, 0.25f)
+                            .clientTrackingRange(64)
+                            .updateInterval(1)
+                            .build("tear_projectile"));
+
+    public static final DeferredHolder<EntityType<?>, EntityType<TimePhaseBodyDoubleEntity>> TIME_PHASE_BODY_DOUBLE =
+            ENTITY_TYPES.register("time_phase_body_double", () ->
+                    EntityType.Builder.<TimePhaseBodyDoubleEntity>of(TimePhaseBodyDoubleEntity::new, MobCategory.MISC)
+                            .sized(0.6f, 1.8f)
+                            .clientTrackingRange(64)
+                            .updateInterval(3)
+                            .build("time_phase_body_double"));
+
     public static void onAttributeCreate(EntityAttributeCreationEvent event) {
         event.put(BODY_DOUBLE.get(), BodyDoubleEntity.createAttributes().build());
         event.put(SPAWN_ILLUSION.get(), SpawnIllusionEntity.createAttributes().build());
+        event.put(TIME_PHASE_BODY_DOUBLE.get(), TimePhaseBodyDoubleEntity.createAttributes().build());
     }
 }

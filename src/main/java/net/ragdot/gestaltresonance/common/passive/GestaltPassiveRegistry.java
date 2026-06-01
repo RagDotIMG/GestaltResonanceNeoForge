@@ -15,8 +15,9 @@ public final class GestaltPassiveRegistry {
     private static final Map<ResourceLocation, GestaltPassive> PASSIVES = new HashMap<>();
 
     static {
-        PASSIVES.put(GestaltIds.AMEN_BREAK, new AmenBreakPassive());
-        PASSIVES.put(GestaltIds.SPILLWAYS,  new SpillwaysPassive());
+        PASSIVES.put(GestaltIds.AMEN_BREAK,  new AmenBreakPassive());
+        PASSIVES.put(GestaltIds.SPILLWAYS,   new SpillwaysPassive());
+        PASSIVES.put(GestaltIds.FLOAT_PLAY,  new FloatPlayPassive());
     }
 
     @Nullable

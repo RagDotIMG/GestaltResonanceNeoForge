@@ -48,6 +48,7 @@ public final class AmenBreakPower3B {
     private static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        if (state.isTimePhaseActive()) { AmenBreakPower3S.activateTimeSkip(player); return; }
         if (state.isPhaseCourtActive()) { playFail(player); return; }
         if (!state.isSummoned() || !state.isAwakened()) { playFail(player); return; }
         if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[2][0]) { playFail(player); return; }
@@ -73,7 +74,13 @@ public final class AmenBreakPower3B {
 
         } else {
             // ── Spawn path ────────────────────────────────────────────────────
-            if (state.getTotalGestaltXp() < GestaltCosts.PHASE_BLOSSOM_XP_COST) { playFail(player); return; }
+            net.minecraft.world.item.ItemStack heldItem = player.getInventory().getSelected();
+            boolean hasCatalyst = !heldItem.isEmpty()
+                    && GestaltCosts.POWER_3_CATALYSTS.contains(heldItem.getItem());
+            if (!player.isCreative() && !hasCatalyst && state.getTotalGestaltXp() < GestaltCosts.PHASE_BLOSSOM_XP_COST) {
+                playFail(player);
+                return;
+            }
 
             HitResult hit = player.pick(GestaltCosts.PHASE_BLOSSOM_PLACE_RANGE, 0.0f, false);
             if (hit.getType() != HitResult.Type.BLOCK) {
@@ -93,9 +100,15 @@ public final class AmenBreakPower3B {
                     player.level(), x, y, z, player.getUUID(), face, blockHit.getBlockPos());
             player.level().addFreshEntity(blossom);
 
-            state.spendGestaltXp(GestaltCosts.PHASE_BLOSSOM_XP_COST);
-            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
-            GestaltNetworking.syncGestaltXpToPlayer(player);
+            if (!player.isCreative()) {
+                if (hasCatalyst) {
+                    heldItem.shrink(1);
+                } else {
+                    state.spendGestaltXp(GestaltCosts.PHASE_BLOSSOM_XP_COST);
+                    player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+                    GestaltNetworking.syncGestaltXpToPlayer(player);
+                }
+            }
 
             player.level().playSound(null, x, y, z,
                     SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS,

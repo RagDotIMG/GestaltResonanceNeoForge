@@ -55,6 +55,7 @@ public class GestaltAttackEvents {
     public static void handleAttackInput(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
+        if (state.isTimePhaseActive()) return;
 
         GestaltAction action = state.getAction();
         UUID uuid = player.getUUID();

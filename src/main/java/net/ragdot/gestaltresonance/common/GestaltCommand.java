@@ -17,8 +17,9 @@ import java.util.Map;
 public final class GestaltCommand {
 
     private static final Map<String, ResourceLocation> GESTALT_NAMES = Map.of(
-            "amen_break", GestaltIds.AMEN_BREAK,
-            "spillways",  GestaltIds.SPILLWAYS
+            "amen_break",  GestaltIds.AMEN_BREAK,
+            "spillways",   GestaltIds.SPILLWAYS,
+            "float_play",  GestaltIds.FLOAT_PLAY
     );
 
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GESTALT =

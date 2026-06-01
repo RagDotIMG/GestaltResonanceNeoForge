@@ -28,14 +28,14 @@ public class PhaseCourtClientHandler {
     private static final float FOG_TARGET_B = 0.16f;
 
     // How much of the original fog color to displace at full intensity (0 = none, 1 = full replace)
-    private static final float FOG_COLOR_STRENGTH = 0.55f;
+    private static final float FOG_COLOR_STRENGTH = 0.80f;
 
-    // Far-plane scale factor at full intensity (0.78 = fog wall 22% closer)
-    private static final float FOG_FAR_SCALE = 0.78f;
+    // Far-plane scale factor at full intensity (0.15 = fog wall 85% closer)
+    private static final float FOG_FAR_SCALE = 0.15f;
 
-    // Full-screen tint at max intensity: dark purple, ~12% alpha
+    // Full-screen tint at max intensity: dark purple, ~20% alpha
     private static final int SCREEN_TINT_RGB = 0x0D0018;
-    private static final int SCREEN_TINT_MAX_ALPHA = 0x1F; // ~12%
+    private static final int SCREEN_TINT_MAX_ALPHA = 0x33; // ~20%
 
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
@@ -47,7 +47,7 @@ public class PhaseCourtClientHandler {
         }
 
         PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (state.isPhaseCourtActive()) {
+        if (state.isPhaseCourtActive() || state.isTimePhaseActive()) {
             intensity = Math.min(1f, intensity + FADE_IN_SPEED);
         } else {
             intensity = Math.max(0f, intensity - FADE_OUT_SPEED);
@@ -64,9 +64,13 @@ public class PhaseCourtClientHandler {
 
     public static void onRenderFog(ViewportEvent.RenderFog event) {
         if (intensity <= 0f) return;
-        // Compress far plane linearly: scale=1 at intensity=0, scale=FOG_FAR_SCALE at intensity=1.
+        // Push near to 0 so fog starts at the camera — without this, vanilla sets
+        // nearPlane to ~75% of render distance in dry air, leaving almost no visible fog band
+        // even with a drastically reduced farPlane.
         float scale = 1f - (1f - FOG_FAR_SCALE) * intensity;
-        event.scaleFarPlaneDistance(scale);
+        event.setNearPlaneDistance(0f);
+        event.setFarPlaneDistance(event.getFarPlaneDistance() * scale);
+        event.setCanceled(true);
     }
 
     public static void onRenderGui(RenderGuiEvent.Post event) {

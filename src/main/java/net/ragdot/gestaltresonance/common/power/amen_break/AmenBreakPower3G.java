@@ -1,7 +1,6 @@
 package net.ragdot.gestaltresonance.common.power.amen_break;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -30,7 +29,6 @@ import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
-import net.ragdot.gestaltresonance.common.entity.PhaseAfterimageEntity;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerKey;
@@ -82,32 +80,53 @@ public final class AmenBreakPower3G {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
         if (!state.isSummoned()) return;
-        if (!state.isAwakened()) return;
-        if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[2][2]) return;
+        if (!player.isCreative() && !state.isAwakened()) return;
+        if (!player.isCreative() && state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[2][2]) return;
         if (!state.isGuarding()) return;
         if (state.isPhaseCourtActive()) return;
         if (state.isPhaseOutActive()) return;
-        if (state.hasPhaseCourtCooldown()) { playFail(player); return; }
+        if (!player.isCreative() && state.hasPhaseCourtCooldown()) { playFail(player); return; }
 
-        // Deduct 75 resonance (clamp to -maxDissonance) — skipped in creative
-        if (!player.isCreative()) {
-            GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
-            int maxDis = stats != null ? GestaltCosts.maxDissonance(stats.resonance()) : 0;
-            int newResonance = Math.max(-maxDis, state.getResonanceValue() - GestaltCosts.PHASE_COURT_RESONANCE_COST);
-            state.setResonanceValue(newResonance);
+        net.minecraft.world.item.ItemStack heldItem = player.getInventory().getSelected();
+        boolean hasCatalyst = !player.isCreative() && !heldItem.isEmpty()
+                && GestaltCosts.POWER_3_CATALYSTS.contains(heldItem.getItem());
+
+        boolean takeoverFromTimePhase = state.isTimePhaseActive();
+        int resonanceCost = takeoverFromTimePhase
+                ? GestaltCosts.PHASE_COURT_FROM_TIME_PHASE_RESONANCE_COST
+                : GestaltCosts.PHASE_COURT_RESONANCE_COST;
+
+        if (!player.isCreative() && !hasCatalyst) {
+            if (state.getResonanceValue() < resonanceCost) {
+                playFail(player);
+                return;
+            }
+            state.setResonanceValue(state.getResonanceValue() - resonanceCost);
+        }
+        if (hasCatalyst) heldItem.shrink(1);
+
+        // Time Phase takeover: tear down Time Phase silently (no teleport, no damage release),
+        // skip spawning a Phase Court body double — the user runs Phase Court without one.
+        if (takeoverFromTimePhase) {
+            AmenBreakPower3S.tearDownForPhaseCourt(player, state);
+            state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         }
 
         // Set cooldown starting now
         state.setPhaseCourtCooldownTicks(GestaltCosts.PHASE_COURT_COOLDOWN_TICKS);
 
-        // Spawn body double at player's position
-        SpawnIllusionEntity bodyDouble = new SpawnIllusionEntity(GestaltEntities.SPAWN_ILLUSION.get(), player.level());
-        bodyDouble.setPos(player.getX(), player.getY(), player.getZ());
-        bodyDouble.setOwnerData(player.getUUID(), player.getLookAngle());
-        bodyDouble.setBodyDoubleMode(true);
-        bodyDouble.copyEquipmentFrom(player);
-        player.level().addFreshEntity(bodyDouble);
-        state.setPhaseCourtBodyDoubleId(bodyDouble.getId());
+        // Spawn body double at player's position — skipped on Time Phase takeover.
+        if (!takeoverFromTimePhase) {
+            SpawnIllusionEntity bodyDouble = new SpawnIllusionEntity(GestaltEntities.SPAWN_ILLUSION.get(), player.level());
+            bodyDouble.setPos(player.getX(), player.getY(), player.getZ());
+            bodyDouble.setOwnerData(player.getUUID(), player.getLookAngle());
+            bodyDouble.setBodyDoubleMode(true);
+            bodyDouble.copyEquipmentFrom(player);
+            player.level().addFreshEntity(bodyDouble);
+            state.setPhaseCourtBodyDoubleId(bodyDouble.getId());
+        } else {
+            state.setPhaseCourtBodyDoubleId(-1);
+        }
 
         // Enable ghost window
         state.setPhaseCourtActive(true);
@@ -230,9 +249,9 @@ public final class AmenBreakPower3G {
         if ((tick == 42 || tick == 44) && lockPos != null) {
             detonatePostHit(player, lockPos, targetEntity);
         }
-        // Tick 46: final explosion includes the target — allowed to die here
+        // Tick 46: final explosion includes the target — allowed to die here, 5× damage
         if (tick == 46 && lockPos != null) {
-            detonatePostHit(player, lockPos, null);
+            detonatePostHit(player, lockPos, null, GestaltCosts.PHASE_COURT_1G_FINAL_EXPLOSION_MULT);
         }
 
         // Tick 47: clear post-hit state
@@ -251,7 +270,10 @@ public final class AmenBreakPower3G {
 
         Entity markedEntity = player.level().getEntity(state.getBreakCoreMarkedEntityId());
         if (!(markedEntity instanceof LivingEntity living) || !living.isAlive()) {
-            // Marked entity died during recording — clear and skip dragback
+            if (markedEntity != null) {
+                releaseAllBankedDamage(player, state, markedEntity.position());
+            }
+            clearAfterimages(player, state);
             state.clearBreakCoreState();
             return true;
         }
@@ -264,13 +286,11 @@ public final class AmenBreakPower3G {
                 state.getBreakCoreSnapshots()[idx] = pos;
                 state.setBreakCoreSnapshotCount(idx + 1);
 
-                // Spawn afterimage at this position
-                if (player.level() instanceof ServerLevel sl) {
-                    PhaseAfterimageEntity afterimage = new PhaseAfterimageEntity(
-                            sl, pos.x, pos.y, pos.z, markedEntity.getId());
-                    sl.addFreshEntity(afterimage);
-                    state.getBreakCoreAfterimageIds()[idx] = afterimage.getId();
-                }
+                // Spawn client-only afterimage on the activating player only.
+                int afterimageId = GestaltNetworking.nextAfterimageId();
+                GestaltNetworking.sendSpawnAfterimage(player, afterimageId,
+                        pos.x, pos.y, pos.z, markedEntity.getId(), 0.7f, 0.03f, AmenBreakPower3S.TINT_VIOLET);
+                state.getBreakCoreAfterimageIds()[idx] = afterimageId;
             }
         }
 
@@ -307,7 +327,8 @@ public final class AmenBreakPower3G {
             // All waypoints reached — final explosion + banked damage
             releasingFinalDamage.set(Boolean.TRUE);
             try {
-                releaseAllBankedDamage(player, state, living.position());
+                Vec3 midpoint = living.position().add(0, living.getBbHeight() * 0.5, 0);
+                releaseAllBankedDamage(player, state, midpoint);
             } finally {
                 releasingFinalDamage.set(Boolean.FALSE);
             }
@@ -335,17 +356,17 @@ public final class AmenBreakPower3G {
             int level = state.getGestaltLevel();
             float radius = GestaltExplosionUtil.scaledRadius(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_RADIUS, level);
             float damage = GestaltExplosionUtil.scaledDamage(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_DAMAGE, level)
-                    * GestaltCosts.PHASE_COURT_EXPLOSION_DAMAGE_MULT;
+                    * GestaltCosts.PHASE_COURT_EXPLOSION_DAMAGE_MULT
+                    * GestaltCosts.PHASE_COURT_1B_DRAGBACK_MULT;
             GestaltExplosionUtil.detonate(
                     player.level(), waypointCenter, radius, damage,
                     GestaltDamageTypes.gestalt(player.level(), player),
                     null, living);
 
-            // Discard the afterimage entity at this waypoint
+            // Discard the client-only afterimage at this waypoint
             int afterimageId = state.getBreakCoreAfterimageIds()[idx];
             if (afterimageId >= 0) {
-                Entity afterimage = player.level().getEntity(afterimageId);
-                if (afterimage != null) afterimage.discard();
+                GestaltNetworking.sendDiscardAfterimage(player, afterimageId);
             }
 
             state.setBreakCoreDragbackIndex(idx - 1);
@@ -434,7 +455,7 @@ public final class AmenBreakPower3G {
         int clamped = Math.max(1, Math.min(strength, GestaltAttackEvents.BASE_DAMAGE_BY_STRENGTH.length - 1));
         float baseDamage = GestaltAttackEvents.BASE_DAMAGE_BY_STRENGTH[clamped]
                 + state.getGestaltLevel() * 0.5f;
-        float finalDamage = baseDamage * GestaltCosts.POWER_1G_DAMAGE_MULTIPLIER * 3.0f;
+        float finalDamage = baseDamage * GestaltCosts.POWER_1G_DAMAGE_MULTIPLIER * GestaltCosts.PHASE_COURT_1G_HIT_MULT;
 
         // Freeze target (AI off)
         if (target instanceof Mob mob) {
@@ -536,7 +557,7 @@ public final class AmenBreakPower3G {
         if (target.level().getServer() == null) return;
         for (ServerPlayer player : target.level().getServer().getPlayerList().getPlayers()) {
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-            if (state.isBreakCoreDragback()
+            if ((state.isBreakCoreDragback() || state.isBreakCoreRecording())
                     && state.getBreakCoreMarkedEntityId() == target.getId()) {
                 state.addBreakCoreBankedDamage(event.getAmount());
                 player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
@@ -567,10 +588,14 @@ public final class AmenBreakPower3G {
     }
 
     private static void detonatePostHit(ServerPlayer player, Vec3 center, Entity excluded) {
+        detonatePostHit(player, center, excluded, 1.0f);
+    }
+
+    private static void detonatePostHit(ServerPlayer player, Vec3 center, Entity excluded, float damageMultiplier) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         int level = state.getGestaltLevel();
         float radius = GestaltExplosionUtil.scaledRadius(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_RADIUS, level);
-        float damage = GestaltExplosionUtil.scaledDamage(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_DAMAGE, level);
+        float damage = GestaltExplosionUtil.scaledDamage(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_DAMAGE, level) * damageMultiplier;
         GestaltExplosionUtil.detonate(
                 player.level(), center, radius, damage,
                 GestaltDamageTypes.gestalt(player.level(), player),
@@ -581,7 +606,8 @@ public final class AmenBreakPower3G {
         float banked = state.getBreakCoreBankedDamage();
         int level = state.getGestaltLevel();
         float radius = GestaltExplosionUtil.scaledRadius(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_RADIUS, level);
-        float baseDamage = GestaltExplosionUtil.scaledDamage(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_DAMAGE, level);
+        float baseDamage = GestaltExplosionUtil.scaledDamage(GestaltCosts.PHASE_COURT_EXPLOSION_BASE_DAMAGE, level)
+                * GestaltCosts.PHASE_COURT_1B_DRAGBACK_MULT;
         float finalDamage = baseDamage + banked;
         GestaltExplosionUtil.detonate(
                 player.level(), pos, radius, finalDamage,
@@ -590,13 +616,13 @@ public final class AmenBreakPower3G {
     }
 
     private static void clearAfterimages(ServerPlayer player, PlayerGestaltState state) {
+        // Send a bulk clear — covers any per-id afterimages still alive on the client.
+        // Other client-side state (Time Phase afterimages, if any) is independent of this call site;
+        // this method is only invoked during Phase Court tear-down where there are no overlapping users.
         int[] ids = state.getBreakCoreAfterimageIds();
-        for (int id : ids) {
-            if (id >= 0) {
-                Entity e = player.level().getEntity(id);
-                if (e != null) e.discard();
-            }
-        }
+        boolean any = false;
+        for (int id : ids) if (id >= 0) { any = true; break; }
+        if (any) GestaltNetworking.sendClearAfterimages(player);
     }
 
     private static void applySlowModifier(ServerPlayer player) {

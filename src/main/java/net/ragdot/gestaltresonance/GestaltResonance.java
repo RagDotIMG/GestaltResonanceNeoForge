@@ -22,6 +22,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.ragdot.gestaltresonance.common.FloatPlayPassiveEvents;
 import net.ragdot.gestaltresonance.common.GestaltDelayedPlacer;
 import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
@@ -30,6 +31,8 @@ import net.ragdot.gestaltresonance.common.GestaltEntities;
 import net.ragdot.gestaltresonance.common.GestaltSoulProjectionEvents;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
+import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
+import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
 import net.ragdot.gestaltresonance.common.GestaltBlocks;
 import net.ragdot.gestaltresonance.common.GestaltIllusionEvents;
@@ -41,8 +44,11 @@ import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2S;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower1B;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3B;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
+import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3S;
 import net.ragdot.gestaltresonance.common.entity.PhaseBlossomEntity;
+import net.ragdot.gestaltresonance.common.entity.DrowningDamageTracker;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
+import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
 import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -91,7 +97,7 @@ public class GestaltResonance {
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> GESTALT_TAB =
             CREATIVE_MODE_TABS.register("gestalt_tab", () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.gestaltresonance"))
-                    .withTabsBefore(CreativeModeTabs.COMBAT)
+                    .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
                     .icon(() -> {
                         net.minecraft.world.item.ItemStack icon = new net.minecraft.world.item.ItemStack(SOUL_VESSEL_EMPTY.get());
                         net.ragdot.gestaltresonance.common.item.SoulVesselEmptyItem.writeStoredGestalt(
@@ -141,6 +147,7 @@ public class GestaltResonance {
         NeoForge.EVENT_BUS.register(new GestaltResonanceEvents());
         NeoForge.EVENT_BUS.register(new GestaltSoulProjectionEvents());
         NeoForge.EVENT_BUS.register(new GestaltDamageBankingEvents());
+        NeoForge.EVENT_BUS.register(new FloatPlayPassiveEvents());
         NeoForge.EVENT_BUS.register(GestaltIllusionEvents.INSTANCE);
         NeoForge.EVENT_BUS.addListener(GestaltCommand::register);
 
@@ -153,10 +160,13 @@ public class GestaltResonance {
         AmenBreakPower1B.register();
         AmenBreakPower3B.register();
         AmenBreakPower3G.register();
+        AmenBreakPower3S.register();
         SpillwaysPower1B.register();
+        SpillwaysPower2B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower3G.EVENT_LISTENER);
+        NeoForge.EVENT_BUS.register(AmenBreakPower3S.EVENT_LISTENER);
 
         // Config
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -206,6 +216,7 @@ public class GestaltResonance {
             // Disarm Phase Out and Phase Court on logout — state should not survive reconnect.
             AmenBreakPower2G.disarm(player);
             AmenBreakPower3G.disarm(player);
+            AmenBreakPower3S.disarm(player);
             if (state.isSummoned()) {
                 // Deactivate passive before clearing summon
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
@@ -219,13 +230,23 @@ public class GestaltResonance {
                 player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             }
 
-            // Discard any body doubles this player owns in all loaded levels
-            var server = player.getServer();
-            if (server != null) {
-                for (var level : server.getAllLevels()) {
-                    BodyDoubleEntity.dismissExistingDoubles(level, player.getUUID());
-                }
-            }
+            dismissAllOwnedBodyDoubles(player);
+        }
+    }
+
+    /**
+     * Discard every body double / illusion entity belonging to this player across all loaded
+     * server levels. Used on logout, respawn, and dimension change so doubles don't outlive
+     * their owner's session or get stranded in the old dimension.
+     */
+    private static void dismissAllOwnedBodyDoubles(ServerPlayer player) {
+        var server = player.getServer();
+        if (server == null) return;
+        java.util.UUID uuid = player.getUUID();
+        for (var level : server.getAllLevels()) {
+            BodyDoubleEntity.dismissExistingDoubles(level, uuid);
+            SpawnIllusionEntity.dismissExistingIllusions(level, uuid);
+            TimePhaseBodyDoubleEntity.dismissExistingDoubles(level, uuid);
         }
     }
 
@@ -236,7 +257,9 @@ public class GestaltResonance {
 
         AmenBreakPower2G.disarm(player);
         AmenBreakPower3G.disarm(player);
+        AmenBreakPower3S.disarm(player);
         PhaseBlossomEntity.dismissBlossom(player.serverLevel(), player.getUUID());
+        dismissAllOwnedBodyDoubles(player);
 
         // copyOnDeath() preserved summoned=true — dismiss cleanly so the first G press summons.
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
@@ -263,6 +286,9 @@ public class GestaltResonance {
     @SubscribeEvent
     public void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        // Body doubles and illusions don't travel through portals — discard any that the player
+        // owns in either the old or new dimension so they don't linger as invulnerable orphans.
+        dismissAllOwnedBodyDoubles(player);
         GestaltNetworking.syncToTracking(player);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncResonanceToPlayer(player);
@@ -270,6 +296,7 @@ public class GestaltResonance {
         GestaltNetworking.syncUnlockedSkinsToOwner(player);
         GestaltNetworking.syncPhaseOutToPlayer(player);
         GestaltNetworking.syncPhaseCourtToPlayer(player);
+        GestaltNetworking.syncTimePhaseToPlayer(player);
     }
 
     /** When a player starts tracking another player, sync the tracked player's gestalt state. */
@@ -286,6 +313,7 @@ public class GestaltResonance {
     public void onServerTick(ServerTickEvent.Post event) {
         var server = event.getServer();
         GestaltDelayedPlacer.tick(server);
+        DrowningDamageTracker.tick(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             LedgeGrabLogic.tickPlayer(player);
             WallSlideLogic.tickPlayer(player);
@@ -293,6 +321,7 @@ public class GestaltResonance {
             AmenBreakPower1G.tick(player);
             AmenBreakPower2G.tick(player);
             AmenBreakPower3G.tick(player);
+            AmenBreakPower3S.tick(player);
 
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (player.isCreative()) {

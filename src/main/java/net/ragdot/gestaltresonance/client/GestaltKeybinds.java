@@ -256,13 +256,14 @@ public class GestaltKeybinds {
         if (state.isGuarding() || guardInitiated) return;
 
         // High-priority items always pass through to vanilla
-        if (isHighPriorityItem(mc.player.getMainHandItem())) return;
+        if (isHighPriorityItem(mc.player.getMainHandItem(), mc.player)) return;
 
         // High-priority targets pass through
         if (mc.hitResult instanceof EntityHitResult ehr && isHighPriorityEntity(ehr.getEntity())) return;
-        if (mc.hitResult instanceof BlockHitResult bhr
-                && mc.level != null
-                && isInteractiveBlock(mc.level, bhr.getBlockPos())) return;
+        if (mc.hitResult instanceof BlockHitResult bhr && mc.level != null) {
+            if (isInteractiveBlock(mc.level, bhr.getBlockPos())) return;
+            if (isSafeToBuild(mc.player)) return;
+        }
 
         // Low-priority interaction — cancel it and start guard
         event.setCanceled(true);
@@ -272,14 +273,15 @@ public class GestaltKeybinds {
 
     // ── Priority helpers (client-side mirror of GestaltGuardEvents) ───────────
 
-    private static boolean isHighPriorityItem(ItemStack stack) {
+    private static boolean isHighPriorityItem(ItemStack stack, net.minecraft.client.player.LocalPlayer player) {
         if (stack.isEmpty()) return false;
         Item item = stack.getItem();
-        if (stack.has(DataComponents.FOOD)) return true;
+        // Food passes through only when hunger is not full — at 20/20 the player can't eat anyway
+        if (stack.has(DataComponents.FOOD) && player.getFoodData().getFoodLevel() < 20) return true;
         if (item instanceof PotionItem) return true;
         if (stack.is(Items.MILK_BUCKET)) return true;
         if (item instanceof BowItem || item instanceof CrossbowItem || item instanceof TridentItem) return true;
-        if (stack.is(Items.ENDER_PEARL) || stack.is(Items.SNOWBALL) || stack.is(Items.EGG)) return true;
+        if (stack.is(Items.SNOWBALL) || stack.is(Items.EGG)) return true;
         if (item instanceof FishingRodItem) return true;
         if (item instanceof LeadItem || item instanceof NameTagItem) return true;
         if (item instanceof SpyglassItem || item instanceof ShearsItem) return true;
@@ -322,6 +324,18 @@ public class GestaltKeybinds {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
         PacketDistributor.sendToServer(new ThrowInputC2S());
+    }
+
+    private static final double SAFE_BUILD_RADIUS = 35.0;
+
+    private static boolean isSafeToBuild(net.minecraft.client.player.LocalPlayer player) {
+        if (!player.onGround() && player.getDeltaMovement().y < 0) return false;
+        boolean holdingBlock = player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem
+                || player.getOffhandItem().getItem() instanceof net.minecraft.world.item.BlockItem;
+        if (!holdingBlock) return false;
+        net.minecraft.world.phys.AABB scanBox = player.getBoundingBox().inflate(SAFE_BUILD_RADIUS);
+        return player.level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class, scanBox,
+                mob -> mob instanceof net.minecraft.world.entity.monster.Enemy && mob.isAlive()).isEmpty();
     }
 
     private static boolean isInteractiveBlock(Level level, BlockPos pos) {

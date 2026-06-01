@@ -200,12 +200,11 @@ public class PhaseBlossomEntity extends Entity {
     // ── Static helpers ────────────────────────────────────────────────────────
 
     public static Optional<PhaseBlossomEntity> findBlossom(ServerLevel level, UUID ownerUuid) {
-        AABB worldBounds = new AABB(
-                -30_000_000, level.getMinBuildHeight(), -30_000_000,
-                 30_000_000, level.getMaxBuildHeight(),  30_000_000);
-        return level.getEntitiesOfClass(PhaseBlossomEntity.class, worldBounds,
-                        e -> ownerUuid.equals(e.getOwnerUuid()))
-                .stream().findFirst();
+        for (Entity e : level.getEntities().getAll()) {
+            if (e instanceof PhaseBlossomEntity blossom && ownerUuid.equals(blossom.getOwnerUuid()))
+                return Optional.of(blossom);
+        }
+        return Optional.empty();
     }
 
     /** Searches every loaded dimension — one blossom per player globally, regardless of where it was placed. */

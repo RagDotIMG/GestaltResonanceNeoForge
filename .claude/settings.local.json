@@ -82,7 +82,12 @@
       "Bash(unzip -p /home/rag/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/21.1.226/ef33fb8ebf21b52b381303f150bfaeb671499cdf/neoforge-21.1.226-sources.jar \"net/neoforged/neoforge/event/entity/player/PlayerSwapHandItemsEvent.java\")",
       "Bash(unzip -p /home/rag/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/21.1.226/ef33fb8ebf21b52b381303f150bfaeb671499cdf/neoforge-21.1.226-sources.jar)",
       "Bash(cat)",
-      "Bash(python3 /tmp/analyze_color.py)"
+      "Bash(python3 /tmp/analyze_color.py)",
+      "Bash(git restore *)",
+      "Bash(./gradlew compileJava -x test)",
+      "Bash(jar -tf /home/rag/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/21.1.226/ef33fb8ebf21b52b381303f150bfaeb671499cdf/neoforge-21.1.226-sources.jar)",
+      "Bash(grep \"\\\\.java$\")",
+      "Bash(jar -xf /home/rag/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/21.1.226/ef33fb8ebf21b52b381303f150bfaeb671499cdf/neoforge-21.1.226-sources.jar \"net/neoforged/neoforge/event/entity/living/LivingChangeTargetEvent.java\")"
     ]
   }
 }

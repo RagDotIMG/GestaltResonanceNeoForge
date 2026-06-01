@@ -1,6 +1,7 @@
 package net.ragdot.gestaltresonance.common.entity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -23,6 +24,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -35,7 +37,10 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltDamageTypes;
 import net.ragdot.gestaltresonance.common.GestaltExplosionUtil;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.common.PopDripTracker;
+import net.ragdot.gestaltresonance.common.PopPadTracker;
 import net.ragdot.gestaltresonance.common.PopSproutTracker;
+import net.ragdot.gestaltresonance.common.PopVineTracker;
 import net.ragdot.gestaltresonance.common.block.AbstractPopBlock;
 import net.ragdot.gestaltresonance.common.block.PopDripBlock;
 import net.ragdot.gestaltresonance.common.block.PopSproutBlock;
@@ -85,7 +90,7 @@ public class PopPodEntity extends ThrowableProjectile {
         FluidState fluid = level().getFluidState(pos);
 
         if (fluid.is(FluidTags.LAVA)) {
-            triggerDirectExplosion(Vec3.atCenterOf(pos), getOwnerAsPlayer());
+            triggerLavaExplosion(Vec3.atCenterOf(pos), getOwnerAsPlayer(), (ServerLevel) level());
             discard();
         } else if (fluid.is(FluidTags.WATER) && fluid.isSource()) {
             ServerPlayer owner = getOwnerAsPlayer();
@@ -126,7 +131,7 @@ public class PopPodEntity extends ThrowableProjectile {
         // Step 1: Fluid check (takes priority over block face logic)
         FluidState fluid = serverLevel.getFluidState(hitPos);
         if (fluid.is(FluidTags.LAVA)) {
-            triggerDirectExplosion(Vec3.atCenterOf(hitPos), owner);
+            triggerLavaExplosion(Vec3.atCenterOf(hitPos), owner, serverLevel);
             discard();
             return;
         }
@@ -138,8 +143,15 @@ public class PopPodEntity extends ThrowableProjectile {
             return;
         }
 
-        // Step 2: Existing pop-block check
+        // Step 2: Magma block — same lava interaction (explosion + fire spread)
         BlockState hitState = serverLevel.getBlockState(hitPos);
+        if (hitState.is(Blocks.MAGMA_BLOCK)) {
+            triggerLavaExplosion(Vec3.atCenterOf(hitPos), owner, serverLevel);
+            discard();
+            return;
+        }
+
+        // Step 3: Existing pop-block check
         Block hitBlock = hitState.getBlock();
         if (hitBlock instanceof PopSproutBlock) {
             if (serverLevel.getBlockEntity(hitPos) instanceof PopSproutBlockEntity be) {
@@ -185,17 +197,31 @@ public class PopPodEntity extends ThrowableProjectile {
     private void placePopPad(ServerLevel level, BlockPos pos) {
         if (!level.getBlockState(pos).isAir()) return;
         if (!level.getFluidState(pos.below()).is(FluidTags.WATER)) return;
-        level.setBlock(pos, GestaltBlocks.POP_PAD.get().defaultBlockState(), Block.UPDATE_ALL);
+        ServerPlayer owner = getOwnerAsPlayer();
+        if (owner != null) {
+            int ownerLevel = owner.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get()).getGestaltLevel();
+            PopPadTracker.get(level.getServer()).addPad(level.getServer(), owner.getUUID(), level.dimension(), pos, ownerLevel);
+        }
+        level.setBlockAndUpdate(pos, GestaltBlocks.POP_PAD.get().defaultBlockState());
     }
 
     private void placePopVine(ServerLevel level, BlockPos start, Direction facing) {
         BlockState vineState = GestaltBlocks.POP_VINE.get().defaultBlockState().setValue(PopVineBlock.FACING, facing);
+        int placed = 0;
         for (int i = 0; i < 3; i++) {
             BlockPos vinePos = start.below(i);
             BlockState at = level.getBlockState(vinePos);
             if (!at.isAir() && !at.is(BlockTags.REPLACEABLE)) break;
             if (!level.getBlockState(vinePos.relative(facing)).isFaceSturdy(level, vinePos.relative(facing), facing.getOpposite())) break;
             GestaltDelayedPlacer.schedule(level, vinePos, vineState, facing, (long) i * 10);
+            placed++;
+        }
+        if (placed > 0) {
+            ServerPlayer owner = getOwnerAsPlayer();
+            if (owner != null) {
+                int ownerLevel = owner.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get()).getGestaltLevel();
+                PopVineTracker.get(level.getServer()).addVine(level.getServer(), owner.getUUID(), level.dimension(), start, ownerLevel);
+            }
         }
     }
 
@@ -211,7 +237,10 @@ public class PopPodEntity extends ThrowableProjectile {
                     || at.is(net.minecraft.world.level.block.Blocks.SOUL_FIRE)) break;
             toPlace.add(p);
         }
-        int ownerLevel = owner.getData(net.ragdot.gestaltresonance.common.GestaltAttachments.PLAYER_GESTALT_STATE.get()).getGestaltLevel();
+        if (toPlace.isEmpty()) return;
+        int ownerLevel = owner.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get()).getGestaltLevel();
+        BlockPos endPos = toPlace.get(toPlace.size() - 1);
+        PopDripTracker.get(level.getServer()).addDrip(level.getServer(), owner.getUUID(), level.dimension(), endPos, ownerLevel);
         for (int i = 0; i < toPlace.size(); i++) {
             boolean isEnd = (i == toPlace.size() - 1);
             BlockState state = GestaltBlocks.POP_DRIP.get().defaultBlockState()
@@ -229,11 +258,11 @@ public class PopPodEntity extends ThrowableProjectile {
         PlayerGestaltState state = owner.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         PopSproutTracker.get(level.getServer())
                 .addSprout(level.getServer(), owner.getUUID(), level.dimension(), pos, state.getGestaltLevel());
-        level.setBlock(pos, GestaltBlocks.POP_SPROUT.get().defaultBlockState(), Block.UPDATE_ALL);
+        level.setBlockAndUpdate(pos, GestaltBlocks.POP_SPROUT.get().defaultBlockState());
         if (level.getBlockEntity(pos) instanceof PopSproutBlockEntity be) {
             be.setOwner(owner.getUUID());
         }
-        level.playSound(null, pos, SoundEvents.BONE_MEAL_USE, SoundSource.BLOCKS, 1.0f, 0.9f + level.random.nextFloat() * 0.2f);
+        level.playSound(null, pos, SoundEvents.BONE_MEAL_USE, SoundSource.BLOCKS, 1.0f, 0.9f + level.getRandom().nextFloat() * 0.2f);
     }
 
     // ── Explosion helper ──────────────────────────────────────────────────────
@@ -249,6 +278,33 @@ public class PopPodEntity extends ThrowableProjectile {
                 ? GestaltDamageTypes.gestalt(level(), owner)
                 : level().damageSources().source(GestaltDamageTypes.GESTALT, null, null);
         GestaltExplosionUtil.detonate(level(), center, radius, damage, src, null);
+    }
+
+    private void triggerLavaExplosion(Vec3 center, @Nullable ServerPlayer owner, ServerLevel level) {
+        triggerDirectExplosion(center, owner);
+        spreadLavaFire(level, BlockPos.containing(center), GestaltCosts.LAVA_FIRE_SPREAD_COUNT);
+    }
+
+    private static void spreadLavaFire(ServerLevel level, BlockPos origin, int maxCount) {
+        int radius = 2;
+        List<BlockPos> candidates = new ArrayList<>();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    BlockPos pos = origin.offset(dx, dy, dz);
+                    if (!level.getBlockState(pos).isAir()) continue;
+                    if (!level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)) continue;
+                    candidates.add(pos);
+                }
+            }
+        }
+        Collections.shuffle(candidates);
+        int placed = 0;
+        for (BlockPos pos : candidates) {
+            if (placed >= maxCount) break;
+            level.setBlockAndUpdate(pos, Blocks.FIRE.defaultBlockState());
+            placed++;
+        }
     }
 
     // ── Utility ───────────────────────────────────────────────────────────────

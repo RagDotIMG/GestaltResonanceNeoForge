@@ -1,10 +1,12 @@
 package net.ragdot.gestaltresonance.mixin;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
+import net.ragdot.gestaltresonance.common.GestaltIds;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,6 +32,8 @@ public abstract class LivingEntityRendererTranslucencyMixin {
     private static final ThreadLocal<Integer> translucencyMode = ThreadLocal.withInitial(() -> 0);
     /** Non-null while rendering a SpawnIllusionEntity; stores the packed ARGB tint. */
     private static final ThreadLocal<Integer> illusionArgb = ThreadLocal.withInitial(() -> null);
+    /** Alpha byte (0–255) for Float Play Spot Late opacity; -1 when inactive. */
+    private static final ThreadLocal<Integer> floatPlayAlpha = ThreadLocal.withInitial(() -> -1);
 
     /** Alpha = 0x4C ≈ 30% (soul projection). */
     private static final int TRANSLUCENT_ALPHA_PROJECTION = 0x4C << 24;
@@ -54,6 +58,16 @@ public abstract class LivingEntityRendererTranslucencyMixin {
             } else if (state.isPhaseCourtActive()) {
                 projecting.set(Boolean.TRUE);
                 translucencyMode.set(3);
+            } else if (state.isSummoned() && GestaltIds.FLOAT_PLAY.equals(state.getGestaltId())
+                    && p == Minecraft.getInstance().player) {
+                int food = p.getFoodData().getFoodLevel();
+                float t = GestaltCosts.spotLateScale(food);
+                if (t > 0f) {
+                    int alpha = Math.round((1.0f - t * (1.0f - GestaltCosts.FLOAT_PLAY_MIN_OPACITY)) * 255);
+                    floatPlayAlpha.set(alpha);
+                    projecting.set(Boolean.TRUE);
+                    translucencyMode.set(4);
+                }
             }
         } else if (entity instanceof SpawnIllusionEntity se) {
             if (se.isBodyDoubleMode()) {
@@ -74,6 +88,7 @@ public abstract class LivingEntityRendererTranslucencyMixin {
         projecting.remove();
         translucencyMode.remove();
         illusionArgb.remove();
+        floatPlayAlpha.remove();
     }
 
     @ModifyArg(method = "render",
@@ -87,6 +102,7 @@ public abstract class LivingEntityRendererTranslucencyMixin {
             int alpha = switch (translucencyMode.get()) {
                 case 2  -> TRANSLUCENT_ALPHA_PHASE_OUT;
                 case 3  -> TRANSLUCENT_ALPHA_PHASE_COURT;
+                case 4  -> floatPlayAlpha.get() << 24;
                 default -> TRANSLUCENT_ALPHA_PROJECTION;
             };
             return alpha | (color & 0x00FFFFFF);

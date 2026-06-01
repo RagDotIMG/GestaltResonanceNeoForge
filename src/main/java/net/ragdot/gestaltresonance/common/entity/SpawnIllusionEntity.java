@@ -155,18 +155,18 @@ public class SpawnIllusionEntity extends PathfinderMob {
             return;
         }
 
-        if (!bodyDouble) {
-            // Redirect mob aggro every 20 ticks (illusion mode only)
-            if (ageTicks % 20 == 0 && ownerUuid != null) {
-                Player owner = level().getPlayerByUUID(ownerUuid);
-                if (owner != null) {
-                    AABB range = getBoundingBox().inflate(24.0);
-                    level().getEntitiesOfClass(Mob.class, range,
-                            mob -> mob.getTarget() == owner || mob.getTarget() == null)
-                            .forEach(mob -> mob.setTarget(this));
-                }
+        // Redirect mob aggro every 20 ticks (both illusion and body double)
+        if (ageTicks % 20 == 0 && ownerUuid != null) {
+            Player owner = level().getPlayerByUUID(ownerUuid);
+            if (owner != null) {
+                AABB range = getBoundingBox().inflate(24.0);
+                level().getEntitiesOfClass(Mob.class, range,
+                        mob -> mob.getTarget() == owner || mob.getTarget() == null)
+                        .forEach(mob -> mob.setTarget(this));
             }
+        }
 
+        if (!bodyDouble) {
             // Expire at lifetime (illusion mode only; body double lifetime controlled by Phase Court)
             if (ageTicks >= GestaltCosts.ILLUSION_LIFETIME) {
                 GestaltIllusionEvents.expire(this, true);
@@ -225,6 +225,15 @@ public class SpawnIllusionEntity extends PathfinderMob {
         forwardDirection = new Vec3(
                 tag.getDouble("FwdX"), tag.getDouble("FwdY"), tag.getDouble("FwdZ"));
         ageTicks = tag.getInt("AgeTicks");
+    }
+
+    /** Remove all spawn illusions owned by the given UUID from this level. */
+    public static void dismissExistingIllusions(Level level, UUID ownerUuid) {
+        if (level.isClientSide) return;
+        ((ServerLevel) level).getEntities().getAll().forEach(e -> {
+            if (e instanceof SpawnIllusionEntity sie && ownerUuid.equals(sie.getOwnerUuid()))
+                sie.discard();
+        });
     }
 
     // ── Inner goals ───────────────────────────────────────────────────────────
@@ -293,7 +302,18 @@ public class SpawnIllusionEntity extends PathfinderMob {
         }
 
         @Override
+        public void start() {
+            requestPath();
+        }
+
+        @Override
         public void tick() {
+            if (!illusion.getNavigation().isInProgress()) {
+                requestPath();
+            }
+        }
+
+        private void requestPath() {
             Vec3 dest = illusion.position().add(illusion.forwardDirection.scale(20.0));
             illusion.getNavigation().moveTo(dest.x, dest.y, dest.z, 1.0);
         }

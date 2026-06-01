@@ -12,6 +12,7 @@
   "entity.gestaltresonance.phase_afterimage": "Phase Afterimage",
   "entity.gestaltresonance.spawn_illusion": "Amen Break",
   "entity.gestaltresonance.phase_court_double": "Phase Court Double",
+  "entity.gestaltresonance.time_phase_body_double": "Amen Break",
   "entity.gestaltresonance.primed_block": "Primed Block",
   "entity.gestaltresonance.pop_pod": "Pop Pod",
   "entity.gestaltresonance.drip_drop": "Drip Drop",
@@ -29,6 +30,7 @@
 
   "gestalt.gestaltresonance.amen_break": "Amen Break",
   "gestalt.gestaltresonance.spillways": "Spillways",
+  "gestalt.gestaltresonance.float_play": "Float Play",
 
   "block.gestaltresonance.pop_sprout": "Pop Sprout",
   "block.gestaltresonance.pop_pad": "Pop Pad",

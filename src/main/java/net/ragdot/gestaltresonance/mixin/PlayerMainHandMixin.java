@@ -28,7 +28,9 @@ public class PlayerMainHandMixin {
     @Inject(method = "getMainHandItem", at = @At("RETURN"), cancellable = true)
     private void gestalt$virtualMainHandItem(CallbackInfoReturnable<ItemStack> cir) {
         if (!((Object) this instanceof Player self)) return;
-        if (!cir.getReturnValue().isEmpty()) return;
+        // Client: keep isEmpty guard so rendering and Jade tooltip see the real held item.
+        // Server: skip guard so virtual tool absorbs hurtAndBreak instead of the real held item.
+        if (self.level().isClientSide() && !cir.getReturnValue().isEmpty()) return;
         // Compute fresh every call — raycast off the player's current crosshair to pick
         // the right tool TYPE for the block being looked at. No cache, so the tool
         // updates instantly as the crosshair moves between blocks (matters for Jade).

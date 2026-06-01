@@ -32,6 +32,7 @@ import net.ragdot.gestaltresonance.client.GestaltKeybinds;
 import net.ragdot.gestaltresonance.client.PhaseCourtClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientInput;
+import net.ragdot.gestaltresonance.client.ClientAfterimageManager;
 import net.ragdot.gestaltresonance.client.entity.BodyDoubleRenderer;
 import net.ragdot.gestaltresonance.client.entity.PhaseAfterimageRenderer;
 import net.ragdot.gestaltresonance.client.entity.PhaseMineModel;
@@ -42,8 +43,10 @@ import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltXpOverlay;
 import net.ragdot.gestaltresonance.client.entity.DripDropRenderer;
 import net.ragdot.gestaltresonance.client.entity.PopPodRenderer;
+import net.ragdot.gestaltresonance.client.entity.TearProjectileRenderer;
 import net.ragdot.gestaltresonance.client.entity.PrimedBlockRenderer;
 import net.ragdot.gestaltresonance.client.entity.SpawnIllusionRenderer;
+import net.ragdot.gestaltresonance.client.entity.TimePhaseBodyDoubleRenderer;
 import net.ragdot.gestaltresonance.client.gestalt.AmenBreakModel;
 import net.ragdot.gestaltresonance.client.gestalt.GestaltModel;
 import net.ragdot.gestaltresonance.client.gestalt.SpillwaysModel;
@@ -90,6 +93,14 @@ public class GestaltResonanceClient {
         NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onFogColor);
         NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderFog);
         NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(ClientAfterimageManager::onClientLevelTick);
+        NeoForge.EVENT_BUS.addListener(ClientAfterimageManager::onRenderLevelStage);
+        GestaltNetworking.onSpawnAfterimageCallback = packet -> ClientAfterimageManager.add(
+                new net.ragdot.gestaltresonance.client.ClientAfterimage(
+                        packet.id(), packet.x(), packet.y(), packet.z(),
+                        packet.sourceEntityId(), packet.opacity(), packet.fadeRate(), packet.tint()));
+        GestaltNetworking.onDiscardAfterimageCallback = packet -> ClientAfterimageManager.remove(packet.id());
+        GestaltNetworking.onClearAfterimagesCallback = ClientAfterimageManager::clear;
         // Soul projection client-side input gating (block break/place/use) and movement prediction
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onLeftClickBlock);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientInput::onRightClickBlock);
@@ -191,6 +202,8 @@ public class GestaltResonanceClient {
         event.registerEntityRenderer(GestaltEntities.PHASE_AFTERIMAGE.get(), PhaseAfterimageRenderer::new);
         event.registerEntityRenderer(GestaltEntities.SPAWN_ILLUSION.get(), SpawnIllusionRenderer::new);
         event.registerEntityRenderer(GestaltEntities.PHASE_BLOSSOM.get(), PhaseBlossomRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.TIME_PHASE_BODY_DOUBLE.get(), TimePhaseBodyDoubleRenderer::new);
+        event.registerEntityRenderer(GestaltEntities.TEAR_PROJECTILE.get(), TearProjectileRenderer::new);
     }
 
     private static void registerParticles(RegisterParticleProvidersEvent event) {

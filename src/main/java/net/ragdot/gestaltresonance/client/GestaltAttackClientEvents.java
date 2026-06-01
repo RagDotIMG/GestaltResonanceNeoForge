@@ -50,6 +50,7 @@ public class GestaltAttackClientEvents {
         PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) {
             wasAttackHeld = false;
+            lastMiningSynced = false;
             return;
         }
 
@@ -82,22 +83,8 @@ public class GestaltAttackClientEvents {
             return;
         }
 
-        if (!chainActive) {
-            // If targeting a block in close range, let vanilla handle mining (hold-to-break)
-            if (mc.hitResult instanceof BlockHitResult bhr
-                    && bhr.getType() != HitResult.Type.MISS
-                    && Vec3.atCenterOf(bhr.getBlockPos()).distanceTo(mc.player.getEyePosition()) <= GestaltCosts.mineRangeFor(state)) {
-                return;
-            }
-        }
-
-        // Consume discrete attack clicks and forward to server
-        while (mc.options.keyAttack.consumeClick()) {
-            PacketDistributor.sendToServer(new AttackInputC2S());
-        }
-
         // Sync mining state on transitions so other players see the mining pose.
-        // (Local detection lives here because it depends on local input + crosshair pick.)
+        // Must run BEFORE the vanilla-mining early return; that return would always block it.
         boolean nowMining = !chainActive
                 && action != GestaltAction.GUARD
                 && action != GestaltAction.LEDGE_GRAB
@@ -112,6 +99,20 @@ public class GestaltAttackClientEvents {
             // Update local state immediately so the local renderer is consistent on this tick.
             state.setMining(nowMining);
             mc.player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        }
+
+        if (!chainActive) {
+            // If targeting a block in close range, let vanilla handle mining (hold-to-break)
+            if (mc.hitResult instanceof BlockHitResult bhr2
+                    && bhr2.getType() != HitResult.Type.MISS
+                    && Vec3.atCenterOf(bhr2.getBlockPos()).distanceTo(mc.player.getEyePosition()) <= GestaltCosts.mineRangeFor(state)) {
+                return;
+            }
+        }
+
+        // Consume discrete attack clicks and forward to server
+        while (mc.options.keyAttack.consumeClick()) {
+            PacketDistributor.sendToServer(new AttackInputC2S());
         }
     }
 

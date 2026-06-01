@@ -15,6 +15,7 @@ import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.Util;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
@@ -48,7 +49,7 @@ public class GestaltManagementScreen extends Screen {
     private final PlayerGestaltState state;
     private final List<GestaltSkin> availableSkins;
     private int currentIndex;
-    private float displayYaw = 0f;
+    private long previewStartMs = -1L;
 
     private GestaltManagementScreen(PlayerGestaltState state) {
         super(Component.translatable("gestalt." + state.getGestaltId().getNamespace() + "." + state.getGestaltId().getPath()));
@@ -124,12 +125,6 @@ public class GestaltManagementScreen extends Screen {
                 PacketDistributor.sendToServer(new SelectGestaltSkinC2S(chosen));
             }
         }
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        displayYaw += 1.5f;  // slow auto-rotate
     }
 
     @Override
@@ -243,6 +238,14 @@ public class GestaltManagementScreen extends Screen {
             texture = def.texture();
         }
 
+        // Wall-clock time drives both rotation and animation. AnimationState.updateTime in
+        // MC 1.21.1 uses getDeltaTracker() internally and ignores the ageInTicks parameter;
+        // in a GUI render context that tracker may only advance at game-tick rate (20 Hz),
+        // making the preview look choppy. Using Util.getMillis() gives render-frame resolution
+        // regardless of the delta tracker's behaviour.
+        if (previewStartMs < 0) previewStartMs = Util.getMillis();
+        float ageInTicks = (Util.getMillis() - previewStartMs) / 50.0f;
+
         PoseStack pose = g.pose();
         pose.pushPose();
         // Anchor the pose origin near the visual "feet" of the preview (below center) —
@@ -254,10 +257,10 @@ public class GestaltManagementScreen extends Screen {
         pose.translate(cx, cy + 30, 100);
         pose.scale(40f, 40f, 40f);
         // 180° around Y so the gestalt's front faces the camera; spin slowly on top of that.
-        pose.mulPose(Axis.YP.rotationDegrees(180f + displayYaw + partialTick * 1.5f));
+        pose.mulPose(Axis.YP.rotationDegrees(180f + ageInTicks * 1.5f));
 
         com.mojang.blaze3d.platform.Lighting.setupForEntityInInventory();
-        model.setupAnim(mc.player, 0, 0, mc.player.tickCount + partialTick, 0, 0);
+        model.setupAnim(mc.player, 0, 0, ageInTicks, 0, 0);
 
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         VertexConsumer vc = buffers.getBuffer(RenderType.entityTranslucent(texture));

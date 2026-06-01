@@ -207,6 +207,20 @@ public class PlayerGestaltState {
     private int breakCoreDragbackIndex = -1;
     private float breakCoreBankedDamage = 0f;
 
+    // --- Time Phase (3S) state (transient, not serialized) ---
+    private boolean timePhaseActive = false;
+    private int timePhaseTicksRemaining = 0;
+    private int timePhaseBodyDoubleId = -1;
+    private int timePhaseCooldownTicks = 0;
+    private final int[] timePhaseTrackedIds = new int[GestaltCosts.TIME_PHASE_MAX_ENTITIES];
+    private int timePhaseTrackedCount = 0;
+    private final Vec3[][] timePhaseSnapshots = new Vec3[GestaltCosts.TIME_PHASE_MAX_ENTITIES][11];
+    private final float[] timePhaseBankedDamage = new float[GestaltCosts.TIME_PHASE_MAX_ENTITIES];
+    private final Vec3[] timePhaseDestinations = new Vec3[GestaltCosts.TIME_PHASE_MAX_ENTITIES];
+    private int timePhaseRecordTick = 0;
+    private boolean timePhasePredictionPhase = false;
+    @Nullable private Vec3 timePhaseBodyDoubleDestination = null;
+
     // --- Soul projection state (transient, not serialized) ---
     private boolean soulProjecting = false;
     private int bodyDoubleEntityId = -1;
@@ -515,6 +529,53 @@ public class PlayerGestaltState {
         breakCoreBankedDamage = 0f;
     }
 
+    // --- Time Phase (3S) accessors ---
+    public boolean isTimePhaseActive() { return timePhaseActive; }
+    public void setTimePhaseActive(boolean v) { timePhaseActive = v; }
+    public int getTimePhaseTicksRemaining() { return timePhaseTicksRemaining; }
+    public void setTimePhaseTicksRemaining(int t) { timePhaseTicksRemaining = t; }
+    public int getTimePhaseBodyDoubleId() { return timePhaseBodyDoubleId; }
+    public void setTimePhaseBodyDoubleId(int id) { timePhaseBodyDoubleId = id; }
+    public int getTimePhaseCooldownTicks() { return timePhaseCooldownTicks; }
+    public void setTimePhaseCooldownTicks(int t) { timePhaseCooldownTicks = Math.max(0, t); }
+    public boolean hasTimePhaseCooldown() { return timePhaseCooldownTicks > 0; }
+    // Tracked entities
+    public int[] getTimePhaseTrackedIds() { return timePhaseTrackedIds; }
+    public int getTimePhaseTrackedCount() { return timePhaseTrackedCount; }
+    public void setTimePhaseTrackedCount(int n) { timePhaseTrackedCount = n; }
+    // Snapshots
+    public Vec3[][] getTimePhaseSnapshots() { return timePhaseSnapshots; }
+    // Banking
+    public float[] getTimePhaseBankedDamage() { return timePhaseBankedDamage; }
+    public void addTimePhaseBankedDamage(int index, float v) { timePhaseBankedDamage[index] += v; }
+    // Destinations
+    public Vec3[] getTimePhaseDestinations() { return timePhaseDestinations; }
+    // Record tick
+    public int getTimePhaseRecordTick() { return timePhaseRecordTick; }
+    public void setTimePhaseRecordTick(int t) { timePhaseRecordTick = t; }
+    // Prediction phase
+    public boolean isTimePhasePredictionPhase() { return timePhasePredictionPhase; }
+    public void setTimePhasePredictionPhase(boolean v) { timePhasePredictionPhase = v; }
+    // Body double destination (set at prediction-phase transition)
+    @Nullable public Vec3 getTimePhaseBodyDoubleDestination() { return timePhaseBodyDoubleDestination; }
+    public void setTimePhaseBodyDoubleDestination(@Nullable Vec3 v) { timePhaseBodyDoubleDestination = v; }
+
+    public void clearTimePhaseState() {
+        timePhaseActive = false;
+        timePhaseTicksRemaining = 0;
+        timePhaseBodyDoubleId = -1;
+        timePhaseTrackedCount = 0;
+        timePhaseRecordTick = 0;
+        timePhasePredictionPhase = false;
+        timePhaseBodyDoubleDestination = null;
+        for (int i = 0; i < GestaltCosts.TIME_PHASE_MAX_ENTITIES; i++) {
+            timePhaseTrackedIds[i] = -1;
+            timePhaseBankedDamage[i] = 0f;
+            timePhaseDestinations[i] = null;
+            for (int j = 0; j < 11; j++) timePhaseSnapshots[i][j] = null;
+        }
+    }
+
     // --- Power state accessors ---
     public boolean hasPowerCooldown(GestaltPowerSlot slot, GestaltPowerModifier mod, long tick) {
         return tick < perPowerCooldowns[slot.ordinal() * 3 + mod.ordinal()];
@@ -539,6 +600,10 @@ public class PlayerGestaltState {
         }
         if (phaseOutCooldownTicks > 20) {
             phaseOutCooldownTicks = 20;
+            changed = true;
+        }
+        if (timePhaseCooldownTicks > 20) {
+            timePhaseCooldownTicks = 20;
             changed = true;
         }
         return changed;
@@ -827,6 +892,20 @@ public class PlayerGestaltState {
         c.breakCoreDragback = this.breakCoreDragback;
         c.breakCoreDragbackIndex = this.breakCoreDragbackIndex;
         c.breakCoreBankedDamage = this.breakCoreBankedDamage;
+        c.timePhaseActive = this.timePhaseActive;
+        c.timePhaseTicksRemaining = this.timePhaseTicksRemaining;
+        c.timePhaseBodyDoubleId = this.timePhaseBodyDoubleId;
+        c.timePhaseCooldownTicks = this.timePhaseCooldownTicks;
+        c.timePhaseTrackedCount = this.timePhaseTrackedCount;
+        c.timePhaseRecordTick = this.timePhaseRecordTick;
+        c.timePhasePredictionPhase = this.timePhasePredictionPhase;
+        c.timePhaseBodyDoubleDestination = this.timePhaseBodyDoubleDestination;
+        System.arraycopy(this.timePhaseTrackedIds, 0, c.timePhaseTrackedIds, 0, this.timePhaseTrackedIds.length);
+        System.arraycopy(this.timePhaseBankedDamage, 0, c.timePhaseBankedDamage, 0, this.timePhaseBankedDamage.length);
+        System.arraycopy(this.timePhaseDestinations, 0, c.timePhaseDestinations, 0, this.timePhaseDestinations.length);
+        for (int i = 0; i < GestaltCosts.TIME_PHASE_MAX_ENTITIES; i++) {
+            System.arraycopy(this.timePhaseSnapshots[i], 0, c.timePhaseSnapshots[i], 0, this.timePhaseSnapshots[i].length);
+        }
         c.soulProjecting = this.soulProjecting;
         c.bodyDoubleEntityId = this.bodyDoubleEntityId;
         c.soulProjectionAnchor = this.soulProjectionAnchor;

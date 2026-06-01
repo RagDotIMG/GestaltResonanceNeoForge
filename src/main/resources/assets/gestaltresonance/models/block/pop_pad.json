@@ -5,8 +5,8 @@
       "from": [1, 0, 1],
       "to": [15, 1, 15],
       "faces": {
-        "up":   { "uv": [1, 1, 15, 15], "texture": "#pad" },
-        "down": { "uv": [1, 1, 15, 15], "texture": "#pad" }
+        "up":   { "uv": [0, 0, 16, 16], "texture": "#pad" },
+        "down": { "uv": [0, 0, 16, 16], "texture": "#pad" }
       }
     }
   ],

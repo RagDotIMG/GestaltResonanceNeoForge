@@ -25,12 +25,14 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.server.level.ServerLevel;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltDamageTypes;
 import net.ragdot.gestaltresonance.common.GestaltExplosionUtil;
 import net.ragdot.gestaltresonance.common.GestaltThrowEvents;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.common.PopPadTracker;
 
 /**
  * Flat bounce pad planted by PopPodEntity when it enters a water source block.
@@ -117,6 +119,14 @@ public class PopPadBlock extends BushBlock {
             return ItemInteractionResult.sidedSuccess(level.isClientSide);
         }
         return super.useItemOn(stack, state, level, pos, player, hand, hit);
+    }
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!newState.is(this) && level instanceof ServerLevel sl) {
+            PopPadTracker.get(sl.getServer()).removeAt(sl, pos);
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     private void triggerExplosion(Level level, BlockPos pos) {

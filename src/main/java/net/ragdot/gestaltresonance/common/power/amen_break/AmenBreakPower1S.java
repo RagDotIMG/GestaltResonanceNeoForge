@@ -126,6 +126,10 @@ public final class AmenBreakPower1S {
 
     public static void activate(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (state.isTimePhaseActive()) {
+            AmenBreakPower3S.activateTimeSkip(player);
+            return;
+        }
         if (state.isPhaseCourtActive()) {
             if (state.isBreakCoreUsed()) {
                 playFail(player);
@@ -145,12 +149,12 @@ public final class AmenBreakPower1S {
             playFail(player);
             return;
         }
-        if (!state.isAwakened()) {
+        if (!player.isCreative() && !state.isAwakened()) {
             GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: not awakened", player.getName().getString());
             playFail(player);
             return;
         }
-        if (state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[0][1]) {
+        if (!player.isCreative() && state.getGestaltLevel() < GestaltCosts.POWER_LEVELS[0][1]) {
             GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: level too low ({})", player.getName().getString(), state.getGestaltLevel());
             playFail(player);
             return;
@@ -162,11 +166,11 @@ public final class AmenBreakPower1S {
             playFail(player);
             return;
         }
-        ItemStack heldItem = player.getMainHandItem();
+        ItemStack heldItem = player.getInventory().getSelected();
         boolean hasCatalyst = !heldItem.isEmpty() && GestaltCosts.POWER_1S_CATALYSTS.contains(heldItem.getItem());
         int xpCost = hasCatalyst ? GestaltCosts.POWER_1S_REDUCED_XP_COST : GestaltCosts.POWER_1S_XP_COST;
 
-        if (state.getTotalGestaltXp() < xpCost) {
+        if (!player.isCreative() && state.getTotalGestaltXp() < xpCost) {
             GestaltResonance.LOGGER.debug("AmenBreak Block Breaker 1S{}: insufficient XP (total {} < {})",
                     player.getName().getString(), state.getTotalGestaltXp(), xpCost);
             playFail(player);
@@ -190,14 +194,16 @@ public final class AmenBreakPower1S {
         }
 
         // Deduct costs (may de-level if within-level XP is insufficient)
-        if (hasCatalyst) heldItem.shrink(1);
-        state.spendGestaltXp(xpCost);
+        if (!player.isCreative()) {
+            if (hasCatalyst) heldItem.shrink(1);
+            state.spendGestaltXp(xpCost);
+        }
         state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.POWER_1S_COOLDOWN);
         if (bypassPrimeableCheck && state.isPhaseCourtActive()) {
             state.setBreakCoreUsed(true);
         }
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
-        GestaltNetworking.syncGestaltXpToPlayer(player);
+        if (!player.isCreative()) GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1S_COOLDOWN);
         if (bypassPrimeableCheck) GestaltNetworking.syncPhaseCourtToPlayer(player);
 
@@ -208,6 +214,10 @@ public final class AmenBreakPower1S {
         PrimedBlockEntity primedBlock = new PrimedBlockEntity(level,
                 pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
                 player, blockState);
+        if (bypassPrimeableCheck) {
+            primedBlock.setSuppressFlash(true);
+            primedBlock.setFuse((int) (GestaltCosts.POWER_1S_FUSE_TICKS * 1.5f));
+        }
         level.addFreshEntity(primedBlock);
 
         level.playSound(null, primedBlock.getX(), primedBlock.getY(), primedBlock.getZ(),

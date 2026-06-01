@@ -50,6 +50,8 @@ public final class AmenBreakPower2G {
     public static void toggle(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
 
+        if (state.isTimePhaseActive()) return;
+
         // Only toggle if player has AmenBreak, is guarding, meets level requirement, and is not in an active ghost window
         if (!GestaltIds.AMEN_BREAK.equals(state.getGestaltId())) return;
         if (!state.isGuarding()) return;

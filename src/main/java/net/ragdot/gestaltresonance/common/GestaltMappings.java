@@ -19,6 +19,7 @@ public final class GestaltMappings {
     public static ResourceLocation gestaltFromHost(EntityType<?> type) {
         if (type == EntityType.CREEPER)    return GestaltIds.AMEN_BREAK;
         if (type == EntityType.GLOW_SQUID) return GestaltIds.SPILLWAYS;
+        if (type == EntityType.GHAST)      return GestaltIds.FLOAT_PLAY;
         return null;
     }
 

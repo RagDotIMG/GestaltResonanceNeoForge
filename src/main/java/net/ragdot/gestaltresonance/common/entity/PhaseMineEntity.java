@@ -22,8 +22,10 @@ import net.ragdot.gestaltresonance.common.GestaltEntities;
 import net.ragdot.gestaltresonance.common.GestaltExplosionUtil;
 
 import javax.annotation.Nullable;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -54,6 +56,8 @@ public class PhaseMineEntity extends Entity {
 
     // Maps each marked entity UUID → the mine currently marking it (server-side only)
     private static final Map<UUID, PhaseMineEntity> MARKED_ENTITIES = new ConcurrentHashMap<>();
+    // Maps owner UUID → set of their active mines (server-side only)
+    private static final Map<UUID, Set<PhaseMineEntity>> OWNER_MINES = new ConcurrentHashMap<>();
 
     public PhaseMineEntity(EntityType<? extends PhaseMineEntity> type, Level level) {
         super(type, level);
@@ -66,6 +70,16 @@ public class PhaseMineEntity extends Entity {
         this.setOwnerUuid(ownerUuid);
         this.setFacing(facing);
         this.setNoGravity(true);
+    }
+
+    @Override
+    public void onAddedToLevel() {
+        super.onAddedToLevel();
+        if (!level().isClientSide()) {
+            UUID owner = getOwnerUuid();
+            if (owner != null)
+                OWNER_MINES.computeIfAbsent(owner, k -> ConcurrentHashMap.newKeySet()).add(this);
+        }
     }
 
     @Override
@@ -186,7 +200,10 @@ public class PhaseMineEntity extends Entity {
             }
 
             boolean isFinal = (dragbackIndex == 0);
-            triggerExplosion(target, isFinal);
+            Vec3 explosionCenter = isFinal
+                    ? markedEntity.position().add(0, markedEntity.getBbHeight() * 0.5, 0)
+                    : target;
+            triggerExplosion(explosionCenter, isFinal);
 
             if (isFinal) {
                 this.discard();
@@ -252,13 +269,23 @@ public class PhaseMineEntity extends Entity {
 
     @Override
     public void remove(RemovalReason reason) {
-        if (!level().isClientSide() && markedEntity != null) {
-            MARKED_ENTITIES.remove(markedEntity.getUUID());
-            if (markedEntity instanceof Mob mob && getState() == STATE_DRAGBACK) {
-                mob.setNoAi(false);
+        if (!level().isClientSide()) {
+            UUID owner = getOwnerUuid();
+            if (owner != null) {
+                Set<PhaseMineEntity> set = OWNER_MINES.get(owner);
+                if (set != null) {
+                    set.remove(this);
+                    if (set.isEmpty()) OWNER_MINES.remove(owner, set);
+                }
             }
-            markedEntity = null;
-            discardAllAfterimages();
+            if (markedEntity != null) {
+                MARKED_ENTITIES.remove(markedEntity.getUUID());
+                if (markedEntity instanceof Mob mob && getState() == STATE_DRAGBACK) {
+                    mob.setNoAi(false);
+                }
+                markedEntity = null;
+                discardAllAfterimages();
+            }
         }
         super.remove(reason);
     }
@@ -334,22 +361,17 @@ public class PhaseMineEntity extends Entity {
     /** Remove all Phase Mines owned by this UUID in the given level. */
     public static void dismissMines(Level level, UUID ownerUuid) {
         if (level.isClientSide) return;
-        AABB worldBounds = new AABB(
-                -30_000_000, level.getMinBuildHeight(), -30_000_000,
-                 30_000_000, level.getMaxBuildHeight(),  30_000_000);
-        level.getEntitiesOfClass(PhaseMineEntity.class, worldBounds,
-                e -> ownerUuid.equals(e.getOwnerUuid()))
-            .forEach(Entity::discard);
+        Set<PhaseMineEntity> mines = OWNER_MINES.get(ownerUuid);
+        if (mines == null) return;
+        mines.stream().filter(e -> e.level() == level).toList().forEach(Entity::discard);
     }
 
     /** Count active Phase Mines owned by this UUID in the given level. */
     public static int countMines(Level level, UUID ownerUuid) {
         if (level.isClientSide) return 0;
-        AABB worldBounds = new AABB(
-                -30_000_000, level.getMinBuildHeight(), -30_000_000,
-                 30_000_000, level.getMaxBuildHeight(),  30_000_000);
-        return level.getEntitiesOfClass(PhaseMineEntity.class, worldBounds,
-                e -> ownerUuid.equals(e.getOwnerUuid())).size();
+        Set<PhaseMineEntity> mines = OWNER_MINES.get(ownerUuid);
+        if (mines == null) return 0;
+        return (int) mines.stream().filter(e -> e.level() == level && !e.isRemoved()).count();
     }
 
     /**
@@ -358,14 +380,14 @@ public class PhaseMineEntity extends Entity {
      */
     public static void dismissOldestIfAtLimit(Level level, UUID ownerUuid, int limit) {
         if (level.isClientSide) return;
-        AABB worldBounds = new AABB(
-                -30_000_000, level.getMinBuildHeight(), -30_000_000,
-                 30_000_000, level.getMaxBuildHeight(),  30_000_000);
-        var mines = level.getEntitiesOfClass(PhaseMineEntity.class, worldBounds,
-                e -> ownerUuid.equals(e.getOwnerUuid()));
-        if (mines.size() >= limit) {
-            mines.stream()
-                    .max(java.util.Comparator.comparingInt(e -> e.tickCount))
+        Set<PhaseMineEntity> mines = OWNER_MINES.get(ownerUuid);
+        if (mines == null) return;
+        List<PhaseMineEntity> inLevel = mines.stream()
+                .filter(e -> e.level() == level && !e.isRemoved())
+                .toList();
+        if (inLevel.size() >= limit) {
+            inLevel.stream()
+                    .max(Comparator.comparingInt(e -> e.tickCount))
                     .ifPresent(Entity::discard);
         }
     }

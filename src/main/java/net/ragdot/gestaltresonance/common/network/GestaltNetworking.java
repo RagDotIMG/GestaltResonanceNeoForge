@@ -105,6 +105,12 @@ public class GestaltNetworking {
         registrar.playToClient(PhaseOutStateSyncS2C.TYPE, PhaseOutStateSyncS2C.STREAM_CODEC, GestaltNetworking::handlePhaseOutStateSync);
         // Phase Court (Power 3G)
         registrar.playToClient(SyncPhaseCourtS2C.TYPE, SyncPhaseCourtS2C.STREAM_CODEC, GestaltNetworking::handleSyncPhaseCourt);
+        // Time Phase (Power 3S)
+        registrar.playToClient(SyncTimePhaseS2C.TYPE, SyncTimePhaseS2C.STREAM_CODEC, GestaltNetworking::handleSyncTimePhase);
+        // Client-only afterimages (used by Time Phase and Phase Court — recipient-only visuals)
+        registrar.playToClient(SpawnAfterimageS2C.TYPE, SpawnAfterimageS2C.STREAM_CODEC, GestaltNetworking::handleSpawnAfterimage);
+        registrar.playToClient(DiscardAfterimageS2C.TYPE, DiscardAfterimageS2C.STREAM_CODEC, GestaltNetworking::handleDiscardAfterimage);
+        registrar.playToClient(ClearAfterimagesS2C.TYPE, ClearAfterimagesS2C.STREAM_CODEC, GestaltNetworking::handleClearAfterimages);
     }
 
     private static void handleAttackInput(AttackInputC2S packet, IPayloadContext ctx) {
@@ -259,6 +265,10 @@ public class GestaltNetworking {
             if (player instanceof ServerPlayer serverPlayer) {
                 PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
                 boolean wasSummoned = state.isSummoned();
+                if (wasSummoned && (state.isPhaseCourtActive() || state.isTimePhaseActive())) {
+                    serverPlayer.playNotifySound(GestaltSounds.GESTALT_FAIL.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+                    return;
+                }
                 if (wasSummoned) {
                     GestaltAttackEvents.cancelChain(serverPlayer);
                     GestaltThrowEvents.cancelThrow(serverPlayer);
@@ -884,6 +894,96 @@ public class GestaltNetworking {
                         state.getPhaseCourtCooldownTicks(),
                         state.getPhaseCourtPostHitTick() > 0));
     }
+
+    // ── Time Phase (Power 3S) ─────────────────────────────────────────────────
+
+    private static void handleSyncTimePhase(SyncTimePhaseS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            net.minecraft.world.entity.player.Player player = ctx.player();
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            state.setTimePhaseActive(packet.active());
+            state.setTimePhasePredictionPhase(packet.predictionPhase());
+            state.setTimePhaseTicksRemaining(packet.ticksRemaining());
+            state.setTimePhaseCooldownTicks(packet.cooldownTicks());
+            state.setTimePhaseBodyDoubleId(packet.bodyDoubleEntityId());
+            state.setTimePhaseTrackedCount(packet.trackedCount());
+            int[] ids = state.getTimePhaseTrackedIds();
+            int[] packetIds = packet.trackedEntityIds();
+            System.arraycopy(packetIds, 0, ids, 0, Math.min(packetIds.length, ids.length));
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        });
+    }
+
+    /** Send the current Time Phase state to the owning player's client. */
+    public static void syncTimePhaseToPlayer(ServerPlayer serverPlayer) {
+        PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        int[] ids = new int[GestaltCosts.TIME_PHASE_MAX_ENTITIES];
+        int[] tracked = state.getTimePhaseTrackedIds();
+        System.arraycopy(tracked, 0, ids, 0, ids.length);
+        PacketDistributor.sendToPlayer(serverPlayer,
+                new SyncTimePhaseS2C(
+                        state.isTimePhaseActive(),
+                        state.isTimePhasePredictionPhase(),
+                        state.getTimePhaseTicksRemaining(),
+                        state.getTimePhaseCooldownTicks(),
+                        state.getTimePhaseBodyDoubleId(),
+                        state.getTimePhaseTrackedCount(),
+                        ids));
+    }
+
+    // ── Client-only afterimages (Time Phase + Phase Court) ───────────────────
+
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_AFTERIMAGE_ID =
+            new java.util.concurrent.atomic.AtomicInteger(1);
+
+    /** Allocate a server-side id for a new afterimage. Unique per server lifetime. */
+    public static int nextAfterimageId() {
+        return NEXT_AFTERIMAGE_ID.getAndIncrement();
+    }
+
+    /** Spawn a client-only afterimage for the given player. fadeRate=0 → persistent. tint is packed RGB. */
+    public static void sendSpawnAfterimage(ServerPlayer serverPlayer, int id,
+                                           double x, double y, double z,
+                                           int sourceEntityId,
+                                           float opacity, float fadeRate, int tint) {
+        PacketDistributor.sendToPlayer(serverPlayer,
+                new SpawnAfterimageS2C(id, x, y, z, sourceEntityId, opacity, fadeRate, tint));
+    }
+
+    /** Remove a single afterimage from the player's client by id. */
+    public static void sendDiscardAfterimage(ServerPlayer serverPlayer, int id) {
+        PacketDistributor.sendToPlayer(serverPlayer, new DiscardAfterimageS2C(id));
+    }
+
+    /** Wipe all client-side afterimages on the given player. */
+    public static void sendClearAfterimages(ServerPlayer serverPlayer) {
+        PacketDistributor.sendToPlayer(serverPlayer, new ClearAfterimagesS2C());
+    }
+
+    private static void handleSpawnAfterimage(SpawnAfterimageS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onSpawnAfterimageCallback != null) onSpawnAfterimageCallback.accept(packet);
+        });
+    }
+
+    private static void handleDiscardAfterimage(DiscardAfterimageS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onDiscardAfterimageCallback != null) onDiscardAfterimageCallback.accept(packet);
+        });
+    }
+
+    private static void handleClearAfterimages(ClearAfterimagesS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onClearAfterimagesCallback != null) onClearAfterimagesCallback.run();
+        });
+    }
+
+    /** Client-side callback: forward SpawnAfterimage to ClientAfterimageManager. */
+    public static java.util.function.Consumer<SpawnAfterimageS2C> onSpawnAfterimageCallback = null;
+    /** Client-side callback: forward DiscardAfterimage to ClientAfterimageManager. */
+    public static java.util.function.Consumer<DiscardAfterimageS2C> onDiscardAfterimageCallback = null;
+    /** Client-side callback: clear all client-side afterimages. */
+    public static Runnable onClearAfterimagesCallback = null;
 
     /** Send the current Phase Out state to the owning player's client. */
     public static void syncPhaseOutToPlayer(ServerPlayer serverPlayer) {

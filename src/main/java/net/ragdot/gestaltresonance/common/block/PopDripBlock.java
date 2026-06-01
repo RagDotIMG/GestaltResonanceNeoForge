@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
+import net.ragdot.gestaltresonance.common.PopDripTracker;
 
 import javax.annotation.Nullable;
 
@@ -59,9 +60,15 @@ public class PopDripBlock extends AbstractPopBlock implements EntityBlock {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!newState.is(this) && state.getValue(END) && level instanceof ServerLevel sl) {
-            // Only schedule if drops weren't exhausted (that path already queued removal)
-            if (level.getBlockEntity(pos) instanceof PopDripBlockEntity be && be.hasRemainingDrops()) {
-                PopDripBlockEntity.scheduleChainRemoval(sl, pos.above());
+            if (level.getBlockEntity(pos) instanceof PopDripBlockEntity be) {
+                // Deregister from tracker regardless of how the vine ended
+                if (be.getOwnerUuid() != null) {
+                    PopDripTracker.get(sl.getServer()).removeDrip(be.getOwnerUuid(), pos);
+                }
+                // Only schedule chain removal if drops weren't exhausted (that path already queued it)
+                if (be.hasRemainingDrops()) {
+                    PopDripBlockEntity.scheduleChainRemoval(sl, pos.above());
+                }
             }
         }
         super.onRemove(state, level, pos, newState, movedByPiston);

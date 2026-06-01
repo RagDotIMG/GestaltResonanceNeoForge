@@ -180,11 +180,9 @@ public class BodyDoubleEntity extends LivingEntity {
     /** Remove all body doubles owned by the given UUID from this level. */
     public static void dismissExistingDoubles(Level level, UUID ownerUuid) {
         if (level.isClientSide) return;
-        AABB worldBounds = new AABB(
-                -30_000_000, level.getMinBuildHeight(), -30_000_000,
-                 30_000_000, level.getMaxBuildHeight(),  30_000_000);
-        level.getEntitiesOfClass(BodyDoubleEntity.class, worldBounds,
-                e -> ownerUuid.equals(e.getOwnerUuid()))
-            .forEach(Entity::discard);
+        ((ServerLevel) level).getEntities().getAll().forEach(e -> {
+            if (e instanceof BodyDoubleEntity bde && ownerUuid.equals(bde.getOwnerUuid()))
+                bde.discard();
+        });
     }
 }

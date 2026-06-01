@@ -44,6 +44,9 @@ public class PopDripBlockEntity extends BlockEntity {
     /**
      * Called by {@link GestaltDelayedPlacer} after the END block is placed.
      */
+    @Nullable
+    public UUID getOwnerUuid() { return ownerUuid; }
+
     public void init(UUID ownerUuid, int gestaltLevel) {
         this.ownerUuid = ownerUuid;
         this.gestaltLevel = gestaltLevel;

@@ -28,6 +28,11 @@ public final class GestaltCosts {
     /** Accumulated absorbed damage required to trigger a guard break. */
     public static final float GUARD_BREAK_DAMAGE_THRESHOLD = 13f;
 
+    /** Maximum damage that can pass through the guard in a single hit (base, before durability scaling). */
+    public static final float GUARD_MAX_THROUGH_BASE = 25f;
+    /** Damage subtracted from the cap per point of durability stat. */
+    public static final float GUARD_MAX_THROUGH_PER_DUR = 2f;
+
     /** Ticks the guard ability is locked out after a guard break. */
     public static final int GUARD_BREAK_COOLDOWN_TICKS = 280;
 
@@ -37,7 +42,7 @@ public final class GestaltCosts {
     // ── Passive fall break (any summoned fall, not just after throw) ──
 
     /** Raw fall distance (blocks) below which the passive fall break does not activate. */
-    public static final float FALL_BREAK_MIN_DISTANCE = 4.0f;
+    public static final float FALL_BREAK_MIN_DISTANCE = 3.0f;
 
     /** Flat blocks subtracted from raw fall distance during a passive fall break. */
     public static final float FALL_BREAK_DISTANCE_REDUCTION = 3.5f;
@@ -145,8 +150,8 @@ public final class GestaltCosts {
     /** Multiplier applied to the standard hit damage formula on a successful Power 1G hit. */
     public static final float POWER_1G_DAMAGE_MULTIPLIER = 1.5f;
 
-    /** Ticks between a successful hit and the delayed explosion. */
-    public static final int POWER_1G_EXPLOSION_DELAY = 50;
+    /** Ticks between remote detonation activation and the explosion firing (with mob shake). */
+    public static final int POWER_1G_DETONATION_DELAY = 20;
 
     /** Cooldown applied at activation; prevents overlapping marks. */
     public static final int POWER_1G_COOLDOWN_TICKS = 55;
@@ -189,16 +194,37 @@ public final class GestaltCosts {
             Items.GUNPOWDER
     );
 
+    /** Held item consumed by any tier-3 power (3B/3G/3S) to waive the normal resonance/XP cost. */
+    public static final Set<Item> POWER_3_CATALYSTS = Set.of(
+            Items.ENDER_PEARL,
+            Items.ENDER_EYE
+    );
+
     /** Ticks the primed block entity stays active before detonating. */
     public static final int POWER_1S_FUSE_TICKS = 80;
 
-    /** Explosion power (radius) of the primed block. */
+    /** Explosion power (radius) of the normal primed block — matches vanilla TNT. */
     public static final float POWER_1S_EXPLOSION_POWER = 4.0f;
+
+    /** Explosion power (radius) of the Break Core primed block (Phase Court variant). */
+    public static final float POWER_1S_BREAK_CORE_EXPLOSION_POWER = 5.0f;
+
+    /** Base entity damage for the Break Core 1S custom explosion. */
+    public static final float POWER_1S_EXPLOSION_BASE_DAMAGE = 8.0f;
 
     /** Cooldown applied at activation. */
     public static final int POWER_1S_COOLDOWN = 55;
 
     // ── Amen Break Jungle Bomber (Power 1B) ──────────────────────────────────
+
+    /** Max concurrent PopVines per player: 4 + floor((level-1)/3). Level 1 → 4, level 13 → 8. */
+    public static int popVineCap(int gestaltLevel) { return 4 + (gestaltLevel - 1) / 3; }
+
+    /** Max concurrent PopDrip vines per player: 4 + floor((level-1)/3). */
+    public static int popDripCap(int gestaltLevel) { return 4 + (gestaltLevel - 1) / 3; }
+
+    /** Max concurrent PopPads per player: 4 + floor((level-1)/3). */
+    public static int popPadCap(int gestaltLevel) { return 4 + (gestaltLevel - 1) / 3; }
 
     /** Gestalt XP cost paid at activation. */
     public static final int POWER_1B_XP_COST = 1;
@@ -217,6 +243,9 @@ public final class GestaltCosts {
 
     /** Distance (blocks) within which a PopSprout triggers on a nearby mob. */
     public static final double POP_SPROUT_TRIGGER_DISTANCE = 2.5;
+
+    /** Max fire blocks spread when a PopPod hits lava. */
+    public static final int LAVA_FIRE_SPREAD_COUNT = 4;
 
     // ── Amen Break Phase Mine (Power 2S) ─────────────────────────────────────
 
@@ -271,16 +300,77 @@ public final class GestaltCosts {
     /** Cooldown after the ghost window ends, in ticks . */
     public static final int PHASE_OUT_COOLDOWN_TICKS = 2020;
 
-    // ── Spillways Power 1B (water manipulation) ──────────────────────────────
-
-    /** Gestalt XP cost paid at activation. */
-    public static final int SPILLWAYS_WATER_XP_COST = 10;
+    // ── Spillways Tears for Fears (Power 1B — seeking water tear) ────────────
 
     /** Cooldown applied at activation, in ticks. */
-    public static final int SPILLWAYS_WATER_COOLDOWN_TICKS = 20;
+    public static final int TEARS_FOR_FEARS_COOLDOWN_TICKS = 5;
+
+    /** Gestalt XP cost paid at activation. */
+    public static final int TEARS_FOR_FEARS_XP_COST = 2;
+
+    /** Player exhaustion paid at activation. */
+    public static final float TEARS_FOR_FEARS_EXHAUSTION = 0.4f;
+
+    /** Forward offset from eye position used for spawn (blocks). */
+    public static final double TEARS_FOR_FEARS_SPAWN_OFFSET = 2.0;
+
+    /** Max ray distance for destination selection (blocks). */
+    public static final double TEARS_FOR_FEARS_DEST_RANGE = 45.0;
+
+    /** Travel speed at spawn (blocks/tick). */
+    public static final float TEARS_FOR_FEARS_BASE_SPEED = 0.05f;
+
+    /** Travel speed at max lifetime — speed scales linearly between these two values. */
+    public static final float TEARS_FOR_FEARS_MAX_SPEED = 0.8f;
+
+    /** Flat speed multiplier applied when in water or it is raining at the entity's position. */
+    public static final float TEARS_FOR_FEARS_WATER_SPEED_MULT = 1.5f;
+
+    /** AABB inflate radius for entity and fire-block target scans (blocks). */
+    public static final double TEARS_FOR_FEARS_SCAN_RADIUS = 8.0;
+
+    /** Maximum entity lifetime in ticks before auto-discard. */
+    public static final int TEARS_FOR_FEARS_MAX_LIFETIME = 400;
+
+    /** Base simultaneous bubble cap per player. */
+    public static final int TEARS_FOR_FEARS_BASE_CAP = 3;
+    /** One extra bubble per this many gestalt levels above zero. */
+    public static final int TEARS_FOR_FEARS_CAP_PER_LEVELS = 3;
+    public static int tearsMaxCount(int gestaltLevel) {
+        return TEARS_FOR_FEARS_BASE_CAP + gestaltLevel / TEARS_FOR_FEARS_CAP_PER_LEVELS;
+    }
+
+    /** Consecutive horizontal-collision ticks required to trigger stuck-discard. */
+    public static final int TEARS_FOR_FEARS_STUCK_TICKS = 20;
+
+    /** Base heal applied to passive entities on contact. */
+    public static final float TEARS_FOR_FEARS_PASSIVE_HEAL_BASE = 5.0f;
+
+    /** Additional heal per urgency level for passive contact. */
+    public static final float TEARS_FOR_FEARS_PASSIVE_HEAL_PER_URGENCY = 3.0f;
+
+    /** Drown-effect duration for hostile contact: (4 + urgency) seconds in ticks. */
+    public static int tearsDrownDurationTicks(int urgency) { return (4 + urgency) * 20; }
+
+    /** Water-breathing effect duration for passive contact: (6 + urgency) seconds in ticks. */
+    public static int tearsWaterBreathingTicks(int urgency) { return (6 + urgency) * 20; }
+
+    /** Slowness amplifier for hostile contact (only applied when urgency > 1). */
+    public static int tearsSlownessAmplifier(int urgency) { return urgency - 1; }
+
+    /** Slowness duration for hostile contact: (4 + urgency) seconds in ticks. */
+    public static int tearsSlownessDurationTicks(int urgency) { return (4 + urgency) * 20; }
+
+    // ── Spillways Lachryma (Power 2B — water take/place) ─────────────────────
+
+    /** Gestalt XP cost paid when placing water. Taking water is free. */
+    public static final int SPILLWAYS_LACHRYMA_XP_COST = 7;
+
+    /** Cooldown applied at activation, in ticks. */
+    public static final int SPILLWAYS_LACHRYMA_COOLDOWN_TICKS = 10;
 
     /** Raytrace reach for water manipulation (blocks). */
-    public static final int SPILLWAYS_WATER_RANGE = 7;
+    public static final int SPILLWAYS_LACHRYMA_RANGE = 7;
 
     // ── Soul projection ──────────────────────────────────────────────────────
 
@@ -315,7 +405,7 @@ public final class GestaltCosts {
     public static double soulProjectionRangeFor(PlayerGestaltState state) {
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         int range = (stats != null) ? stats.range() : 0;
-        return 4 + range + (range == 5 ? 1 : 0);
+        return 4 + range + (range == 5 ? 1 : 0) + (range == 6 ? 2 : 0);
     }
 
     // ── Resonance system ─────────────────────────────────────────────────────
@@ -333,21 +423,21 @@ public final class GestaltCosts {
     public static final float[] RESONANCE_TIER_MULTIPLIER = { 0f, 1.0f, 1.2f, 1.4f };
 
     // Resonance gains (base values before tier multiplier)
-    public static final int GAIN_COMBO_HIT_BASE              = 2;
-    public static final int GAIN_COMBO_HIT2_BONUS            = 1;
-    public static final int GAIN_COMBO_HIT3_BONUS            = 2;
+    public static final int GAIN_COMBO_HIT_BASE              = 1;
+    public static final int GAIN_COMBO_HIT2_BONUS            = 3;
+    public static final int GAIN_COMBO_HIT3_BONUS            = 4;
     public static final int GAIN_CHARGED_STRIKE_HIT          = 10;
-    public static final int GAIN_KILL                        = 4;
-    public static final int GAIN_OVERKILL_HOSTILE            = 2;
+    public static final int GAIN_KILL                        = 5;
+    public static final int GAIN_OVERKILL_HOSTILE            = 4;
     public static final int GAIN_FALL_BREAK_KILL             = 7;
-    public static final int GAIN_MULTI_KILL                  = 7;
+    public static final int GAIN_MULTI_KILL                  = 5;
     public static final int GAIN_MULTI_KILL_WINDOW           = 20;
     public static final int GAIN_CHAIN_FINISHER_LOW_HP       = 7;
     /** Health (half-hearts * 2) below which the chain finisher bonus activates: 4 hearts = 8 health. */
     public static final float GAIN_CHAIN_FINISHER_HP_THRESHOLD = 8.0f;
     public static final int GAIN_PARRY                       = 7;
-    public static final int GAIN_PARRY_WINDOW_MIN            = 2;
-    public static final int GAIN_PARRY_WINDOW_MAX            = 6;
+    public static final int GAIN_PARRY_WINDOW_MIN            = 1;
+    public static final int GAIN_PARRY_WINDOW_MAX            = 7;
     public static final int GAIN_XP_CHANNEL                  = 2;
     public static final int GAIN_XP_CHANNEL_THRESHOLD        = 5;
 
@@ -362,18 +452,18 @@ public final class GestaltCosts {
     public static final float LOSS_NEAR_DEATH_THRESHOLD      = 6.0f;
 
     // Decay
-    public static final int DECAY_SUMMONED_HOSTILE_INTERVAL   = 20;
-    public static final int DECAY_SUMMONED_NO_HOSTILE_INTERVAL = 15;
+    public static final int DECAY_SUMMONED_HOSTILE_INTERVAL   = 23;
+    public static final int DECAY_SUMMONED_NO_HOSTILE_INTERVAL = 18;
     public static final int DECAY_UNSUMMONED_INTERVAL         = 5;
     public static final int DECAY_UNSUMMONED_RATE             = 2;
-    public static final int DECAY_HOSTILE_DETECTION_RADIUS    = 15;
+    public static final int DECAY_HOSTILE_DETECTION_RADIUS    = 20;
     /** Ticks after last hostile contact before switching to the faster no-hostile decay rate. */
     public static final int DECAY_HOSTILE_GRACE_TICKS         = 300;
 
     /** Fraction of dissonance cap at which desperate struggle activates (80%). */
     public static final float DESPERATE_STRUGGLE_THRESHOLD        = 0.8f;
     /** Damage multiplier applied to gestalt hits during desperate struggle (tunable per-gestalt). */
-    public static final float DESPERATE_STRUGGLE_DAMAGE_MULTIPLIER = 1.3f;
+    public static final float DESPERATE_STRUGGLE_DAMAGE_MULTIPLIER = 1.5f;
 
     // ── Resonance helpers ────────────────────────────────────────────────────
 
@@ -416,7 +506,9 @@ public final class GestaltCosts {
     // ── Amen Break Phase Court (Power 3G) ──────────────────────────────────
 
     /** Resonance cost paid at activation. */
-    public static final int PHASE_COURT_RESONANCE_COST           = 75;
+    public static final int PHASE_COURT_RESONANCE_COST           = 50;
+    /** Reduced resonance cost when activating Phase Court from an active Time Phase. */
+    public static final int PHASE_COURT_FROM_TIME_PHASE_RESONANCE_COST = 35;
 
     /** Duration of the ghost window in ticks (8 seconds). */
     public static final int PHASE_COURT_GHOST_TICKS              = 160;
@@ -443,10 +535,19 @@ public final class GestaltCosts {
     public static final float PHASE_COURT_EXPLOSION_BASE_RADIUS  = 2.5f;
 
     /** Base explosion damage for afterimage contacts during dragback. */
-    public static final float PHASE_COURT_EXPLOSION_BASE_DAMAGE  = 4.0f;
+    public static final float PHASE_COURT_EXPLOSION_BASE_DAMAGE  = 5.0f;
 
     /** Damage multiplier for each non-final afterimage explosion. */
     public static final float PHASE_COURT_EXPLOSION_DAMAGE_MULT  = 0.5f;
+
+    /** Damage multiplier on the initial Break Core 1G hit (on top of POWER_1G_DAMAGE_MULTIPLIER). */
+    public static final float PHASE_COURT_1G_HIT_MULT             = 10.0f;
+
+    /** Damage multiplier applied to the final (tick-46) post-hit explosion relative to scaled base. */
+    public static final float PHASE_COURT_1G_FINAL_EXPLOSION_MULT = 10.0f;
+
+    /** Damage multiplier applied to all Break Core 1B dragback explosions. */
+    public static final float PHASE_COURT_1B_DRAGBACK_MULT        = 10.0f;
 
     /** Ticks player + target are frozen after Break Core 1G hits. */
     public static final int PHASE_COURT_1G_PLAYER_LOCK_TICKS     = 20;
@@ -456,6 +557,82 @@ public final class GestaltCosts {
 
     /** Alpha byte (0–255) for Phase Court ghost window rendering (~10%). Change here updates both body and gestalt. */
     public static final int PHASE_COURT_GHOST_ALPHA = 0x1A;
+
+    // ── Amen Break Time Phase (Power 3S) ──────────────────────────────────
+
+    /** Resonance cost paid at activation. */
+    public static final int    TIME_PHASE_RESONANCE_COST         = 25;
+
+    /** Duration of the ghost window in ticks (10 seconds). */
+    public static final int    TIME_PHASE_GHOST_TICKS            = 200;
+
+    /** Ticks at which catch-up ends and prediction phase begins. */
+    public static final int    TIME_PHASE_OBSERVATION_TICKS      = 80;
+
+    /** Cooldown in ticks applied at activation (not window end). */
+    public static final int    TIME_PHASE_COOLDOWN_TICKS         = 2000;
+
+    /** Ticks between entity position snapshots (and afterimage spawns). */
+    public static final int    TIME_PHASE_SNAPSHOT_INTERVAL      = 20;
+
+    /** Maximum number of entities that can be tracked simultaneously. */
+    public static final int    TIME_PHASE_MAX_ENTITIES           = 12;
+
+    /** Radius (blocks) scanned for entities at activation. */
+    public static final double TIME_PHASE_SCAN_RADIUS            = 24.0;
+
+    /** ADD_MULTIPLIED_TOTAL speed modifier applied to each tracked entity. */
+    public static final double TIME_PHASE_ENTITY_SLOW            = -0.05;
+
+    /** ADD_MULTIPLIED_BASE speed modifier applied to the player during the window. */
+    public static final double TIME_PHASE_CATCHUP_SLOW           = -0.9;
+
+    /** Blocks ahead the body double walks in its initial facing direction when no PopSprout is in range. */
+    public static final double TIME_PHASE_BODY_DOUBLE_WALK_DIST  = 12.0;
+
+    /** XZ random spread (blocks) added to each entity's computed destination on Time Skip. */
+    public static final double TIME_PHASE_DESTINATION_RADIUS     = 8.0;
+
+    /** Base explosion radius when releasing banked damage at window end. */
+    public static final float  TIME_PHASE_EXPLOSION_BASE_RADIUS  = 2.0f;
+
+    /** Base explosion damage when releasing banked damage at window end. */
+    public static final float  TIME_PHASE_EXPLOSION_BASE_DAMAGE  = 6.0f;
+
+    /** Max range (blocks) of the look-ray used to pick the body double's destination at tick 80. */
+    public static final double TIME_PHASE_BODY_DOUBLE_MAX_RANGE  = 35.0;
+
+    /** Max blocks to scan downward from a mid-air ray hit to find a solid block. */
+    public static final int    TIME_PHASE_BODY_DOUBLE_DROP_SCAN  = 35;
+
+    // ── Float Play: Spot Late passive ─────────────────────────────────────────
+
+    /** Hunger at which Spot Late effects are maximised (matches crash threshold). */
+    public static final int FLOAT_PLAY_HUNGER_MIN = 6;
+
+    /** Hunger at which Spot Late effects begin to apply (full hunger = no effect). */
+    public static final int FLOAT_PLAY_HUNGER_MAX = 20;
+
+    /** Minimum mob-visibility multiplier at minimum hunger (full hunger = 1.0). */
+    public static final double FLOAT_PLAY_MIN_VISIBILITY = 0.3;
+
+    /** Minimum render opacity (0–1) at minimum hunger (full hunger = 1.0). */
+    public static final float FLOAT_PLAY_MIN_OPACITY = 0.5f;
+
+    /** Gravity ADD_VALUE reduction applied at minimum hunger (base gravity is 0.08). */
+    public static final double FLOAT_PLAY_GRAVITY_REDUCTION = 0.04;
+
+    /** Fall distance reduction at minimum hunger, giving flat HP reduction of equal amount. */
+    public static final float FLOAT_PLAY_FALL_DISTANCE_REDUCTION = 4.0f;
+
+    /**
+     * Returns the Spot Late interpolation factor: 0.0 at full hunger, 1.0 at minimum hunger.
+     * Values below {@link #FLOAT_PLAY_HUNGER_MIN} are clamped to 1.0.
+     */
+    public static float spotLateScale(int food) {
+        int range = FLOAT_PLAY_HUNGER_MAX - FLOAT_PLAY_HUNGER_MIN;
+        return Math.min(1f, Math.max(0f, (float)(FLOAT_PLAY_HUNGER_MAX - food) / range));
+    }
 
     private GestaltCosts() {}
 }

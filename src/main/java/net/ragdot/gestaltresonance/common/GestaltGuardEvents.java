@@ -4,11 +4,14 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ExperienceBottleItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SnowballItem;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -46,9 +49,36 @@ public class GestaltGuardEvents {
         cancelIfGuarding(event, event.getEntity());
     }
 
+    private static final double SAFE_BUILD_RADIUS = 32.0;
+
     @SubscribeEvent
     public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        cancelIfGuarding(event, event.getEntity());
+        Player player = event.getEntity();
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!state.isSummoned()) return;
+
+        GestaltAction action = state.getAction();
+        if (action == GestaltAction.CHARGED_STRIKE_WINDUP) {
+            event.setCanceled(true);
+            return;
+        }
+
+        if (!state.isGuarding()) return;
+
+        // Allow block placement when on the ground with no hostiles within range
+        if (player instanceof ServerPlayer sp && isSafeToBuild(sp)) return;
+
+        event.setCanceled(true);
+    }
+
+    private static boolean isSafeToBuild(ServerPlayer player) {
+        if (!player.onGround() && player.getDeltaMovement().y < 0) return false;
+        boolean holdingBlock = player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem
+                || player.getOffhandItem().getItem() instanceof net.minecraft.world.item.BlockItem;
+        if (!holdingBlock) return false;
+        AABB scanBox = player.getBoundingBox().inflate(SAFE_BUILD_RADIUS);
+        return player.level().getEntitiesOfClass(Mob.class, scanBox,
+                mob -> mob instanceof Enemy && mob.isAlive()).isEmpty();
     }
 
     @SubscribeEvent
@@ -96,8 +126,10 @@ public class GestaltGuardEvents {
             return;
         }
 
-        // Normal guard: apply reduction, accumulate, drain hunger
-        event.setAmount(event.getAmount() * multiplier);
+        // Normal guard: apply reduction, cap single-hit pass-through, accumulate, drain hunger
+        float reducedDamage = event.getAmount() * multiplier;
+        float maxThrough = GestaltCosts.GUARD_MAX_THROUGH_BASE - durability * GestaltCosts.GUARD_MAX_THROUGH_PER_DUR;
+        event.setAmount(Math.min(reducedDamage, maxThrough));
         state.addGuardDamageAccumulated(absorbed);
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         player.causeFoodExhaustion(GestaltCosts.GUARD_ACTIVATION);
@@ -142,9 +174,9 @@ public class GestaltGuardEvents {
         return item instanceof SnowballItem        // snowball
             || item instanceof ExperienceBottleItem // bottle o' enchanting
             || item == Items.EGG
-            || item == Items.ENDER_PEARL
             || item == Items.FIRE_CHARGE
             || item == Items.SPLASH_POTION
+            || item == Items.POTION
             || item == Items.LINGERING_POTION;
     }
 }

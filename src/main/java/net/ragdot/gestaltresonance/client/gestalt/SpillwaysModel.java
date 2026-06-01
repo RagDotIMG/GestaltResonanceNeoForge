@@ -83,6 +83,11 @@ public class SpillwaysModel extends GestaltModel {
         return SpillwaysAnimations.SWIM;
     }
 
+    @Override
+    protected AnimationDefinition wallSlideAnimation() {
+        return SpillwaysAnimations.WALL_SLIDE;
+    }
+
     public static LayerDefinition createBodyLayer() {
         MeshDefinition meshdefinition = new MeshDefinition();
         PartDefinition partdefinition = meshdefinition.getRoot();
@@ -101,7 +106,7 @@ public class SpillwaysModel extends GestaltModel {
         torso_up.addOrReplaceChild("boob_r1", CubeListBuilder.create().texOffs(14, 20).addBox(-2.0F, -1.0F, -1.5F, 4.0F, 2.0F, 3.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(0.0F, -1.9052F, -0.6712F, -0.5672F, 0.0F, 0.0F));
 
         PartDefinition head = torso_up.addOrReplaceChild("head", CubeListBuilder.create().texOffs(26, 0).addBox(-2.0F, -4.1F, -2.0F, 4.0F, 4.0F, 4.0F, new CubeDeformation(0.1F))
-                .texOffs(26, 8).addBox(-2.0F, -2.5F, -1.9F, 4.0F, 2.0F, 0.0F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, -5.05F, -0.025F));
+                .texOffs(26, 8).mirror().addBox(-2.0F, -2.5F, -1.9F, 4.0F, 2.0F, 0.0F, new CubeDeformation(0.0F)).mirror(false), PartPose.offset(0.0F, -5.05F, -0.025F));
 
         PartDefinition hat = head.addOrReplaceChild("hat", CubeListBuilder.create().texOffs(0, 0).addBox(-2.9901F, -3.1581F, -2.8943F, 6.0F, 4.0F, 6.0F, new CubeDeformation(0.1F)), PartPose.offset(-0.0099F, -3.9419F, -0.0057F));
 

@@ -57,7 +57,7 @@ public class PopSproutBlockEntity extends BlockEntity {
             gestaltLevel = s.getGestaltLevel();
         }
 
-        Vec3 center = Vec3.atCenterOf(pos);
+        Vec3 center = new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
         float radius = GestaltExplosionUtil.scaledRadius(GestaltCosts.POWER_1B_EXPLOSION_BASE_RADIUS, gestaltLevel);
         float damage = GestaltExplosionUtil.scaledDamage(GestaltCosts.POWER_1B_EXPLOSION_BASE_DAMAGE, gestaltLevel);
         DamageSource src = ownerPlayer != null
