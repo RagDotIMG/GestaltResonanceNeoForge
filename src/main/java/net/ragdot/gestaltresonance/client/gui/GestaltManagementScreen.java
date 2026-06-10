@@ -13,6 +13,8 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.ChatFormatting;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.Util;
@@ -45,6 +47,7 @@ public class GestaltManagementScreen extends Screen {
     private static final int PANEL_HEIGHT = 200;
 
     private static final String[] POWER_COLS = {"B", "S", "G"};
+    private static final String[] POWER_COL_LETTERS = {"b", "s", "g"};
 
     private final PlayerGestaltState state;
     private final List<GestaltSkin> availableSkins;
@@ -159,7 +162,15 @@ public class GestaltManagementScreen extends Screen {
         renderStats(g, leftX + PANEL_WIDTH / 2 + 10, topY + 24);
 
         // ── Power grid ──
-        renderPowerGrid(g, leftX + PANEL_WIDTH / 2 + 10, topY + 110);
+        int gridX = leftX + PANEL_WIDTH / 2 + 10;
+        int gridY = topY + 110;
+        renderPowerGrid(g, gridX, gridY);
+
+        // ── Power grid tooltip ──
+        List<Component> tooltip = getPowerTooltip(gridX, gridY, mouseX, mouseY);
+        if (tooltip != null) {
+            g.renderComponentTooltip(this.font, tooltip, mouseX, mouseY);
+        }
     }
 
     private void renderStats(GuiGraphics g, int x, int y) {
@@ -221,6 +232,31 @@ public class GestaltManagementScreen extends Screen {
                 g.drawString(this.font, reqLabel, cx + (cell - rlw) / 2, rowY + cell / 2 - 4, textColor);
             }
         }
+    }
+
+    private List<Component> getPowerTooltip(int gridX, int gridY, int mouseX, int mouseY) {
+        int cell = 24;
+        int gap = 4;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                int cx = gridX + 18 + c * (cell + gap);
+                int cy = gridY + r * (cell + gap);
+                if (mouseX >= cx && mouseX < cx + cell && mouseY >= cy && mouseY < cy + cell) {
+                    String base = "gestalt." + state.getGestaltId().getNamespace() + "."
+                            + state.getGestaltId().getPath() + ".power_" + (r + 1) + POWER_COL_LETTERS[c];
+                    String nameKey = base + ".name";
+                    if (!Language.getInstance().has(nameKey)) return null;
+                    List<Component> lines = new ArrayList<>();
+                    lines.add(Component.translatable(nameKey).withStyle(ChatFormatting.YELLOW));
+                    String descKey = base + ".desc";
+                    if (Language.getInstance().has(descKey)) {
+                        lines.add(Component.translatable(descKey).withStyle(ChatFormatting.GRAY));
+                    }
+                    return lines;
+                }
+            }
+        }
+        return null;
     }
 
     private void renderGestaltPreview(GuiGraphics g, int cx, int cy, float partialTick) {
