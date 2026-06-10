@@ -220,6 +220,8 @@ public class PlayerGestaltState {
     private int timePhaseRecordTick = 0;
     private boolean timePhasePredictionPhase = false;
     @Nullable private Vec3 timePhaseBodyDoubleDestination = null;
+    private int timePhaseBodyDoubleAfterimageId = -1;
+    private float timePhaseBodyDoubleBankedDamage = 0f;
 
     // --- Soul projection state (transient, not serialized) ---
     private boolean soulProjecting = false;
@@ -559,6 +561,10 @@ public class PlayerGestaltState {
     // Body double destination (set at prediction-phase transition)
     @Nullable public Vec3 getTimePhaseBodyDoubleDestination() { return timePhaseBodyDoubleDestination; }
     public void setTimePhaseBodyDoubleDestination(@Nullable Vec3 v) { timePhaseBodyDoubleDestination = v; }
+    public int getTimePhaseBodyDoubleAfterimageId() { return timePhaseBodyDoubleAfterimageId; }
+    public void setTimePhaseBodyDoubleAfterimageId(int id) { timePhaseBodyDoubleAfterimageId = id; }
+    public float getTimePhaseBodyDoubleBankedDamage() { return timePhaseBodyDoubleBankedDamage; }
+    public void setTimePhaseBodyDoubleBankedDamage(float v) { timePhaseBodyDoubleBankedDamage = v; }
 
     public void clearTimePhaseState() {
         timePhaseActive = false;
@@ -568,6 +574,8 @@ public class PlayerGestaltState {
         timePhaseRecordTick = 0;
         timePhasePredictionPhase = false;
         timePhaseBodyDoubleDestination = null;
+        timePhaseBodyDoubleAfterimageId = -1;
+        timePhaseBodyDoubleBankedDamage = 0f;
         for (int i = 0; i < GestaltCosts.TIME_PHASE_MAX_ENTITIES; i++) {
             timePhaseTrackedIds[i] = -1;
             timePhaseBankedDamage[i] = 0f;
@@ -900,6 +908,8 @@ public class PlayerGestaltState {
         c.timePhaseRecordTick = this.timePhaseRecordTick;
         c.timePhasePredictionPhase = this.timePhasePredictionPhase;
         c.timePhaseBodyDoubleDestination = this.timePhaseBodyDoubleDestination;
+        c.timePhaseBodyDoubleAfterimageId = this.timePhaseBodyDoubleAfterimageId;
+        c.timePhaseBodyDoubleBankedDamage = this.timePhaseBodyDoubleBankedDamage;
         System.arraycopy(this.timePhaseTrackedIds, 0, c.timePhaseTrackedIds, 0, this.timePhaseTrackedIds.length);
         System.arraycopy(this.timePhaseBankedDamage, 0, c.timePhaseBankedDamage, 0, this.timePhaseBankedDamage.length);
         System.arraycopy(this.timePhaseDestinations, 0, c.timePhaseDestinations, 0, this.timePhaseDestinations.length);

@@ -202,7 +202,7 @@ public class PhaseMineEntity extends Entity {
             boolean isFinal = (dragbackIndex == 0);
             Vec3 explosionCenter = isFinal
                     ? markedEntity.position().add(0, markedEntity.getBbHeight() * 0.5, 0)
-                    : target;
+                    : target.add(0, markedEntity.getBbHeight() * 0.5, 0);
             triggerExplosion(explosionCenter, isFinal);
 
             if (isFinal) {

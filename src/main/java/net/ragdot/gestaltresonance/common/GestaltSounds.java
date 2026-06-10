@@ -60,6 +60,10 @@ public final class GestaltSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> GESTALT_WALLSLIDE =
             register("gestalt.wallslide");
 
+    /** Ambient track that plays during Time Phase (3S) and Phase Court (3G). Client-side only. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> AMEN_BREAK_AMBI =
+            register("gestalt.amen_break_ambi");
+
     private static DeferredHolder<SoundEvent, SoundEvent> register(String name) {
         return SOUND_EVENTS.register(name, () ->
                 SoundEvent.createVariableRangeEvent(

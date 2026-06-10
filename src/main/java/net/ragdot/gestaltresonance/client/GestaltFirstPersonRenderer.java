@@ -274,9 +274,10 @@ public class GestaltFirstPersonRenderer {
             float lookX = -Mth.sin(yawRad) * Mth.cos(pitchRad);
             float lookY = -Mth.sin(pitchRad);
             float lookZ =  Mth.cos(yawRad) * Mth.cos(pitchRad);
-            finalX = cam.x + ATTACK_OFFSET_X * Mth.cos(yawRad) + ATTACK_OFFSET_Z * lookX;
-            finalY = cam.y + CAM_OFFSET_Y + 0.1F + ATTACK_OFFSET_Z * lookY;
-            finalZ = cam.z + ATTACK_OFFSET_X * Mth.sin(yawRad) + ATTACK_OFFSET_Z * lookZ;
+            float atkZ = action == GestaltAction.POWER_1G_WINDUP ? ATTACK_OFFSET_Z - 0.5F : ATTACK_OFFSET_Z;
+            finalX = cam.x + ATTACK_OFFSET_X * Mth.cos(yawRad) + atkZ * lookX;
+            finalY = cam.y + CAM_OFFSET_Y + 0.1F + atkZ * lookY;
+            finalZ = cam.z + ATTACK_OFFSET_X * Mth.sin(yawRad) + atkZ * lookZ;
         } else if (guarding) {
             gestaltYaw = Mth.rotLerp(partialTick, player.yHeadRotO, player.getYHeadRot());
             float headPitch = Mth.rotLerp(partialTick, player.xRotO, player.getXRot());

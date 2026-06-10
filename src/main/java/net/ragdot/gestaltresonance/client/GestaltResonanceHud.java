@@ -24,7 +24,9 @@ public class GestaltResonanceHud {
 
     private static final int SEGMENT_PX  = 20;  // pixels per 25-point segment
     private static final int BAR_HEIGHT  = 3;
-    private static final int BAR_X       = 199;   // left margin
+    // Bar is right-anchored to the head icon's right edge: screenW/2 - 91 - 3.
+    // barY sits between the head icon (which ends at screenH-32) and the hotbar (screenH-22).
+    private static final int BAR_Y_OFFSET = 28;  // screenH - BAR_Y_OFFSET = fill top
 
     /** Ticks at 0 before the fade-out begins. */
     private static final int FADE_DELAY_TICKS = 200;
@@ -100,9 +102,15 @@ public class GestaltResonanceHud {
 
         if (totalSeg == 0 && !phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0) return;
 
+        int screenW      = event.getGuiGraphics().guiWidth();
+        int screenH      = event.getGuiGraphics().guiHeight();
+        // Right-anchored to the head icon's right edge (screenW/2 - 91 - 3).
+        // Bar extends leftward; this way wider bars (higher resonance stat) grow left, not right.
+        int barRightX    = screenW / 2 - 91 - 3;
         int barWidth     = totalSeg * SEGMENT_PX;
-        int barY         = mc.getWindow().getGuiScaledHeight() - 56;
-        int equilibriumX = BAR_X + disSeg * SEGMENT_PX;
+        int barLeftX     = barRightX - barWidth;
+        int barY         = screenH - BAR_Y_OFFSET;
+        int equilibriumX = barLeftX + disSeg * SEGMENT_PX;
 
         var graphics = event.getGuiGraphics();
         boolean barFaded = (alpha == 0f);
@@ -110,10 +118,10 @@ public class GestaltResonanceHud {
         if (!barFaded) {
             // 1px white border (4 lines, no fill)
             int borderColor = withAlpha(COLOR_EQUILIBRIUM, alpha);
-            graphics.fill(BAR_X - 1, barY - 1, BAR_X + barWidth + 1, barY,                   borderColor); // top
-            graphics.fill(BAR_X - 1, barY + BAR_HEIGHT, BAR_X + barWidth + 1, barY + BAR_HEIGHT + 1, borderColor); // bottom
-            graphics.fill(BAR_X - 1, barY - 1, BAR_X,                         barY + BAR_HEIGHT + 1, borderColor); // left
-            graphics.fill(BAR_X + barWidth, barY - 1, BAR_X + barWidth + 1,   barY + BAR_HEIGHT + 1, borderColor); // right
+            graphics.fill(barLeftX - 1, barY - 1, barRightX + 1, barY,                    borderColor); // top
+            graphics.fill(barLeftX - 1, barY + BAR_HEIGHT, barRightX + 1, barY + BAR_HEIGHT + 1, borderColor); // bottom
+            graphics.fill(barLeftX - 1, barY - 1, barLeftX,               barY + BAR_HEIGHT + 1, borderColor); // left
+            graphics.fill(barRightX,    barY - 1, barRightX + 1,          barY + BAR_HEIGHT + 1, borderColor); // right
 
             // Fill: resonance side (right of equilibrium)
             if (value > 0) {
@@ -131,7 +139,7 @@ public class GestaltResonanceHud {
 
             // Segment dividers
             for (int i = 1; i < totalSeg; i++) {
-                int divX = BAR_X + i * SEGMENT_PX;
+                int divX = barLeftX + i * SEGMENT_PX;
                 if (divX == equilibriumX) {
                     graphics.fill(divX, barY, divX + 3, barY + BAR_HEIGHT, withAlpha(COLOR_EQUILIBRIUM, alpha));
                 } else {
@@ -140,8 +148,8 @@ public class GestaltResonanceHud {
             }
         }
 
-        // Phase Out indicator: always render when armed/active/cooldown, full alpha when armed.
-        drawPhaseOutIndicator(graphics, BAR_X + barWidth + 4, barY - 1);
+        // Phase Out indicator: attached to the LEFT of the bar so it doesn't overlap the hotbar.
+        drawPhaseOutIndicator(graphics, barLeftX - PO_SIZE - 4, barY - 1);
     }
 
     // Phase Out indicator constants — square 5×5 inner area

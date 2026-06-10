@@ -1,6 +1,7 @@
 package net.ragdot.gestaltresonance.common.item;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -223,6 +224,9 @@ public class SoulVesselEmptyItem extends Item {
         if (data != null) {
             tooltipComponents.add(Component.literal("Stored Gestalt: " + data.gestaltType()));
             tooltipComponents.add(Component.literal("Level: " + data.gestaltLevel()));
+        } else {
+            tooltipComponents.add(Component.literal("use on soulfire to fill").withStyle(ChatFormatting.GRAY));
+            tooltipComponents.add(Component.literal("use on self when crouching to store Gestalt").withStyle(ChatFormatting.GRAY));
         }
     }
 

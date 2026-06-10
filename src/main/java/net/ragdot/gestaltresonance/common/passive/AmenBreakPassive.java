@@ -40,6 +40,8 @@ public class AmenBreakPassive implements GestaltPassive {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
         player.playNotifySound(GestaltSounds.GESTALT_DISSOLVE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+        player.level().playSound(player, player.getX(), player.getY(), player.getZ(),
+                GestaltSounds.GESTALT_DISSOLVE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
         GestaltNetworking.syncToTracking(player);
         if (wasGuarding) GestaltNetworking.syncGuardToTracking(player, false);
     }

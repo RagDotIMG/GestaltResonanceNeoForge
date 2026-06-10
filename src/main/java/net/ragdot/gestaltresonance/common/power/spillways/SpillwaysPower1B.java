@@ -1,7 +1,10 @@
 package net.ragdot.gestaltresonance.common.power.spillways;
 
+import java.util.List;
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.Vec3;
@@ -40,16 +43,29 @@ public final class SpillwaysPower1B {
 
         long currentTick = player.getServer().getTickCount();
         if (state.hasPowerCooldown(KEY.slot(), KEY.modifier(), currentTick)) { playFail(player); return; }
-        if (state.getTotalGestaltXp() < GestaltCosts.TEARS_FOR_FEARS_XP_COST) { playFail(player); return; }
 
         if (!(player.level() instanceof ServerLevel serverLevel)) { playFail(player); return; }
 
-        // Enforce per-player active bubble cap
+        // Lock an existing bubble if the player is looking at one within range
+        TearProjectileEntity lockTarget = findLookTarget(player, serverLevel);
+        if (lockTarget != null) {
+            lockTarget.lock();
+            state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.TEARS_FOR_FEARS_COOLDOWN_TICKS);
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.6f, 1.6f);
+            GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.TEARS_FOR_FEARS_COOLDOWN_TICKS);
+            GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.TEARS_FOR_FEARS_COOLDOWN_TICKS);
+            return;
+        }
+
+        if (state.getTotalGestaltXp() < GestaltCosts.TEARS_FOR_FEARS_XP_COST) { playFail(player); return; }
+
+        // Enforce per-player active bubble cap (locked bubbles are excluded)
         int maxTears = GestaltCosts.tearsMaxCount(state.getGestaltLevel());
         int activeTears = serverLevel.getEntitiesOfClass(
                 TearProjectileEntity.class,
                 player.getBoundingBox().inflate(GestaltCosts.TEARS_FOR_FEARS_DEST_RANGE + 10),
-                e -> e.isOwnedBy(player.getUUID())
+                e -> e.isOwnedBy(player.getUUID()) && !e.isLocked()
         ).size();
         if (activeTears >= maxTears) { playFail(player); return; }
 
@@ -81,6 +97,35 @@ public final class SpillwaysPower1B {
         player.causeFoodExhaustion(GestaltCosts.TEARS_FOR_FEARS_EXHAUSTION);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.TEARS_FOR_FEARS_COOLDOWN_TICKS);
+        GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.TEARS_FOR_FEARS_COOLDOWN_TICKS);
+    }
+
+    @javax.annotation.Nullable
+    private static TearProjectileEntity findLookTarget(ServerPlayer player, ServerLevel level) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        double range = GestaltCosts.TEARS_FOR_FEARS_LOCK_RANGE;
+
+        List<TearProjectileEntity> candidates = level.getEntitiesOfClass(
+                TearProjectileEntity.class,
+                player.getBoundingBox().inflate(range),
+                e -> e.isOwnedBy(player.getUUID()) && !e.isLocked()
+        );
+
+        TearProjectileEntity best = null;
+        double bestDistSq = Double.MAX_VALUE;
+        for (TearProjectileEntity tear : candidates) {
+            Vec3 toTear = tear.position().subtract(eye);
+            double distSq = toTear.lengthSqr();
+            if (distSq > range * range) continue;
+            if (toTear.normalize().dot(look) > 0.97) {
+                if (distSq < bestDistSq) {
+                    bestDistSq = distSq;
+                    best = tear;
+                }
+            }
+        }
+        return best;
     }
 
     private SpillwaysPower1B() {}

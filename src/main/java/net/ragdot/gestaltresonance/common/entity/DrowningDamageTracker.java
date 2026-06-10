@@ -35,6 +35,11 @@ public final class DrowningDamageTracker {
         TRACKED.merge(entityId, expiryTick, Math::max);
     }
 
+    /** Returns true if the entity is currently tracked (drowning effect is active). */
+    public static boolean isTracked(UUID entityId) {
+        return TRACKED.containsKey(entityId);
+    }
+
     /** Called every server tick from GestaltResonance.onServerTick. */
     public static void tick(MinecraftServer server) {
         long currentTick = server.getTickCount();

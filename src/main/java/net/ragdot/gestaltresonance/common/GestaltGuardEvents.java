@@ -144,6 +144,8 @@ public class GestaltGuardEvents {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
         player.playNotifySound(GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+        player.level().playSound(player, player.getX(), player.getY(), player.getZ(),
+                GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
         GestaltResonanceEvents.applyResonance(player, -15);
 
         // Knock player back away from the hit source

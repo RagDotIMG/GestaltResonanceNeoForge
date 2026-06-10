@@ -77,6 +77,7 @@ public final class AmenBreakPower3S {
     static final int TINT_VIOLET = (0x61 << 16) | (0x1A << 8) | 0x85;  // normal path
     static final int TINT_BLUE   = (0x10 << 16) | (0x40 << 8) | 0xCC;  // start of prediction
     static final int TINT_GREEN  = (0x10 << 16) | (0xCC << 8) | 0x40;  // entity destinations
+    static final int TINT_RED    = (0xFF << 16) | (0x20 << 8) | 0x20;  // body double death
 
     private AmenBreakPower3S() {}
 
@@ -118,6 +119,7 @@ public final class AmenBreakPower3S {
         bodyDouble.setPos(player.getX(), player.getY(), player.getZ());
         bodyDouble.setOwnerUuid(player.getUUID());
         bodyDouble.copyEquipmentFrom(player);
+        bodyDouble.copyStatsFrom(player);
         bodyDouble.setInitialYaw(player.getYRot());
         player.level().addFreshEntity(bodyDouble);
         state.setTimePhaseBodyDoubleId(bodyDouble.getId());
@@ -178,9 +180,15 @@ public final class AmenBreakPower3S {
             return;
         }
 
-        if (!state.isSummoned()) {
-            endTimePhaseWindow(player, state);
-            return;
+        // Body double death: banked damage exceeds the double's effective HP.
+        // Despawn the entity and leave a red afterimage — window continues.
+        if (state.getTimePhaseBodyDoubleId() >= 0) {
+            Entity bdCheck = player.level().getEntity(state.getTimePhaseBodyDoubleId());
+            if (bdCheck instanceof TimePhaseBodyDoubleEntity tpbd
+                    && tpbd.getBankedDamage() >= tpbd.getMaxHealth()) {
+                handleBodyDoubleDeath(player, state, tpbd);
+                state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            }
         }
 
         int recordTick = state.getTimePhaseRecordTick() + 1;
@@ -230,7 +238,7 @@ public final class AmenBreakPower3S {
 
         int remaining = state.getTimePhaseTicksRemaining() - 1;
         if (remaining <= 0) {
-            endTimePhaseWindow(player, state);
+            endTimePhaseWindow(player, state, false);
             return;
         }
         state.setTimePhaseTicksRemaining(remaining);
@@ -258,10 +266,11 @@ public final class AmenBreakPower3S {
         if (bdEntity instanceof TimePhaseBodyDoubleEntity bd && bd.isAlive()) {
             bdDest = computeBodyDoubleDestination(player);
             state.setTimePhaseBodyDoubleDestination(bdDest);
-            bd.setWalkTarget(bdDest);
-            double distance = bd.position().distanceTo(bdDest);
-            bd.applyDestinationSpeed(distance, ticksRemaining);
-            spawnPersistentAfterimage(player, bdDest.x, bdDest.y, bdDest.z, bd.getId(), TINT_GREEN);
+            bd.setBodyDoubleDestination(bdDest);
+            int bdAfterimageId = GestaltNetworking.nextAfterimageId();
+            GestaltNetworking.sendSpawnAfterimage(player, bdAfterimageId,
+                    bdDest.x, bdDest.y, bdDest.z, bd.getId(), 0.5f, 0f, TINT_GREEN);
+            state.setTimePhaseBodyDoubleAfterimageId(bdAfterimageId);
         }
 
         // ── Step 2: first pass — compute destinations using current logic
@@ -329,14 +338,14 @@ public final class AmenBreakPower3S {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isTimePhaseActive()) return;
         if (!state.isTimePhasePredictionPhase()) { playFail(player); return; }
-        endTimePhaseWindow(player, state);
+        endTimePhaseWindow(player, state, true);
         player.playNotifySound(GestaltSounds.GESTALT_SUMMON.get(), SoundSource.PLAYERS, 1.0f, 1.4f);
     }
 
     // ── End window (natural expiration or Time Skip) ─────────────────────────
 
-    static void endTimePhaseWindow(ServerPlayer player, PlayerGestaltState state) {
-        // Teleport tracked entities to destinations + release banked damage.
+    static void endTimePhaseWindow(ServerPlayer player, PlayerGestaltState state, boolean applyTeleport) {
+        // Release banked damage (always). Teleport to destinations only on Time Skip.
         int count = state.getTimePhaseTrackedCount();
         int[] trackedIds = state.getTimePhaseTrackedIds();
         Vec3[] destinations = state.getTimePhaseDestinations();
@@ -346,11 +355,13 @@ public final class AmenBreakPower3S {
             Entity entity = player.level().getEntity(trackedIds[i]);
             if (!(entity instanceof LivingEntity living) || !living.isAlive()) continue;
 
-            Vec3 dest = destinations[i];
-            if (dest != null) {
-                living.teleportTo(dest.x, dest.y, dest.z);
-                if (player.level() instanceof ServerLevel) {
-                    spawnFadingAfterimage(player, dest.x, dest.y, dest.z, living.getId());
+            if (applyTeleport) {
+                Vec3 dest = destinations[i];
+                if (dest != null) {
+                    living.teleportTo(dest.x, dest.y, dest.z);
+                    if (player.level() instanceof ServerLevel) {
+                        spawnFadingAfterimage(player, dest.x, dest.y, dest.z, living.getId());
+                    }
                 }
             }
 
@@ -373,8 +384,12 @@ public final class AmenBreakPower3S {
 
         // Discard body double and teleport player to its destination.
         Vec3 bdDest = state.getTimePhaseBodyDoubleDestination();
+        float bankedFromDouble = state.getTimePhaseBodyDoubleBankedDamage(); // persisted if entity died early
         if (state.getTimePhaseBodyDoubleId() >= 0) {
             Entity bd = player.level().getEntity(state.getTimePhaseBodyDoubleId());
+            if (bd instanceof TimePhaseBodyDoubleEntity tpbd) {
+                bankedFromDouble += tpbd.getBankedDamage();
+            }
             if (bd != null) bd.discard();
             state.setTimePhaseBodyDoubleId(-1);
         }
@@ -384,6 +399,45 @@ public final class AmenBreakPower3S {
 
         cleanupTimePhase(player, state);
         player.playNotifySound(GestaltSounds.GESTALT_SUMMON.get(), SoundSource.PLAYERS, 0.8f, 1.2f);
+
+        // Echo 80% of damage the body double absorbed back to the player
+        if (bankedFromDouble > 0) {
+            player.hurt(player.damageSources().magic(), bankedFromDouble * 0.8f);
+        }
+    }
+
+    // ── Body double death (banked damage overflow) ────────────────────────────
+
+    private static void handleBodyDoubleDeath(ServerPlayer player, PlayerGestaltState state,
+                                              TimePhaseBodyDoubleEntity bd) {
+        Vec3 deathPos = bd.position();
+
+        // Persist banked damage so endTimePhaseWindow() can echo it back
+        state.setTimePhaseBodyDoubleBankedDamage(bd.getBankedDamage());
+
+        // Discard the green destination afterimage (no longer valid)
+        int destAfterimageId = state.getTimePhaseBodyDoubleAfterimageId();
+        if (destAfterimageId >= 0) {
+            GestaltNetworking.sendDiscardAfterimage(player, destAfterimageId);
+            state.setTimePhaseBodyDoubleAfterimageId(-1);
+        }
+
+        // Spawn bright red persistent afterimage. Send the packet before discard so the client
+        // can snapshot the body double's renderer/texture while it's still in the world.
+        int deathAfterimageId = GestaltNetworking.nextAfterimageId();
+        GestaltNetworking.sendSpawnAfterimage(player, deathAfterimageId,
+                deathPos.x, deathPos.y, deathPos.z, bd.getId(), 1.0f, 0f, TINT_RED);
+
+        bd.discard();
+        player.level().playSound(null, deathPos.x, deathPos.y, deathPos.z,
+                GestaltSounds.GESTALT_DISSOLVE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+
+        // Player will teleport to the death position when the window ends
+        state.setTimePhaseBodyDoubleDestination(deathPos);
+
+        state.setTimePhaseBodyDoubleId(-1);
+        player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        GestaltNetworking.syncTimePhaseToPlayer(player);
     }
 
     // ── Phase Court takeover ─────────────────────────────────────────────────

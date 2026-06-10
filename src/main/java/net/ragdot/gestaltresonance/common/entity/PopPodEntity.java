@@ -115,7 +115,8 @@ public class PopPodEntity extends ThrowableProjectile {
             return;
         }
 
-        triggerDirectExplosion(result.getLocation(), getOwnerAsPlayer());
+        LivingEntity living = (LivingEntity) target;
+        triggerDirectExplosion(living.position().add(0, living.getBbHeight() * 0.5, 0), getOwnerAsPlayer());
         discard();
     }
 

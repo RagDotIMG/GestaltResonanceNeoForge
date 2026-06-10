@@ -6,9 +6,16 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 
@@ -47,6 +54,9 @@ public final class GestaltCommand {
                         .then(Commands.literal("lvl")
                                 .then(Commands.argument("level", IntegerArgumentType.integer(1, PlayerGestaltState.MAX_GESTALT_LEVEL))
                                         .executes(ctx -> setLevel(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "level")))))
+                        .then(Commands.literal("debug")
+                                .then(Commands.literal("clearlight")
+                                        .executes(ctx -> clearOrphanedLights(ctx.getSource()))))
         );
     }
 
@@ -99,6 +109,53 @@ public final class GestaltCommand {
 
         src.sendSuccess(() -> Component.literal("Set gestalt level to " + level + "."), false);
         return 1;
+    }
+
+    private static int clearOrphanedLights(CommandSourceStack src) {
+        MinecraftServer server = src.getServer();
+        int total = 0;
+        for (ServerLevel level : server.getAllLevels()) {
+            int minY = level.getMinBuildHeight();
+            // Collect chunk coords from all players in this level, plus a 10-chunk radius
+            java.util.Set<Long> visited = new java.util.HashSet<>();
+            for (ServerPlayer p : level.players()) {
+                int pcx = p.chunkPosition().x;
+                int pcz = p.chunkPosition().z;
+                for (int dx = -10; dx <= 10; dx++) {
+                    for (int dz = -10; dz <= 10; dz++) {
+                        int cx = pcx + dx;
+                        int cz = pcz + dz;
+                        long key = (long) cx << 32 | (cz & 0xFFFFFFFFL);
+                        if (!visited.add(key)) continue;
+                        LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+                        if (chunk == null) continue;
+                        LevelChunkSection[] sections = chunk.getSections();
+                        int chunkBaseX = chunk.getPos().getMinBlockX();
+                        int chunkBaseZ = chunk.getPos().getMinBlockZ();
+                        for (int si = 0; si < sections.length; si++) {
+                            LevelChunkSection section = sections[si];
+                            if (section.hasOnlyAir()) continue;
+                            if (!section.getStates().maybeHas(s -> s.is(Blocks.LIGHT))) continue;
+                            int baseY = minY + si * 16;
+                            for (int x = 0; x < 16; x++) {
+                                for (int y = 0; y < 16; y++) {
+                                    for (int z = 0; z < 16; z++) {
+                                        BlockPos pos = new BlockPos(chunkBaseX + x, baseY + y, chunkBaseZ + z);
+                                        if (level.getBlockState(pos).is(Blocks.LIGHT)) {
+                                            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                                            total++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        final int count = total;
+        src.sendSuccess(() -> Component.literal("Removed " + count + " orphaned light block(s) across all loaded levels."), false);
+        return count;
     }
 
     private static int clear(CommandSourceStack src) throws com.mojang.brigadier.exceptions.CommandSyntaxException {

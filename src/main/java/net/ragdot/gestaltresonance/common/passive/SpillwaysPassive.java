@@ -1,9 +1,11 @@
 package net.ragdot.gestaltresonance.common.passive;
 
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.ragdot.gestaltresonance.common.SpillwaysLightManager;
 
 /**
- * Spillways passive:
+ * spillways passive:
  * - Air drains at half speed while the gestalt is summoned and the player is submerged.
  * - Underwater mining speed penalty is already cancelled for all summoned gestalts by
  *   GestaltMiningEvents.onBreakSpeed (tier override replaces vanilla's 0.2× multiplier).
@@ -25,5 +27,8 @@ public class SpillwaysPassive implements GestaltPassive {
     public void onActivate(ServerPlayer player) {}
 
     @Override
-    public void onDeactivate(ServerPlayer player) {}
+    public void onDeactivate(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server != null) SpillwaysLightManager.removePlayerLight(server, player.getUUID());
+    }
 }

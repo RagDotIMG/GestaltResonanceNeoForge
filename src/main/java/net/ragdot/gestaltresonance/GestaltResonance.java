@@ -9,7 +9,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.component.WritableBookContent;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
@@ -32,6 +34,7 @@ import net.ragdot.gestaltresonance.common.GestaltSoulProjectionEvents;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
+import net.ragdot.gestaltresonance.common.entity.TearProjectileEntity;
 import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.GestaltBlockEntities;
 import net.ragdot.gestaltresonance.common.GestaltBlocks;
@@ -47,6 +50,7 @@ import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3S;
 import net.ragdot.gestaltresonance.common.entity.PhaseBlossomEntity;
 import net.ragdot.gestaltresonance.common.entity.DrowningDamageTracker;
+import net.ragdot.gestaltresonance.common.SpillwaysLightManager;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2B;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
@@ -71,6 +75,9 @@ import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
 import net.ragdot.gestaltresonance.common.WallSlideLogic;
+import net.ragdot.gestaltresonance.common.item.DustyDocumentContents;
+import net.ragdot.gestaltresonance.common.item.DustyDocumentsItem;
+import net.ragdot.gestaltresonance.common.item.DustyDocumentsWritableItem;
 import net.ragdot.gestaltresonance.common.item.NetherTearItem;
 import net.ragdot.gestaltresonance.common.item.ResonantPowderItem;
 import net.ragdot.gestaltresonance.common.item.SoulVesselEmptyItem;
@@ -89,6 +96,20 @@ public class GestaltResonance {
     public static final DeferredItem<Item> RESONANT_POWDER = ITEMS.registerItem("resonant_powder", ResonantPowderItem::new, new Item.Properties());
     public static final DeferredItem<Item> SOUL_VESSEL_EMPTY = ITEMS.registerItem("soul_vessel_empty", SoulVesselEmptyItem::new, new Item.Properties().stacksTo(16));
     public static final DeferredItem<Item> SOUL_VESSEL_FRAGILE = ITEMS.registerItem("soul_vessel_fragile", SoulVesselFragileItem::new, new Item.Properties().stacksTo(1));
+
+    // --- Dusty Documents ---
+    public static final DeferredItem<Item> FILE_117_AMEN_BREAK = ITEMS.registerItem(
+            "file_117_amen_break",
+            props -> new DustyDocumentsItem(DustyDocumentContents.amenBreakFile117(), props),
+            new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> FILE_42069_THE_GESTALT = ITEMS.registerItem(
+            "file_42069_the_gestalt",
+            props -> new DustyDocumentsItem(DustyDocumentContents.theGestaltFile42069(), props),
+            new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> FILE_WRITABLE = ITEMS.registerItem(
+            "file_writable",
+            DustyDocumentsWritableItem::new,
+            new Item.Properties().stacksTo(1).component(DataComponents.WRITABLE_BOOK_CONTENT, WritableBookContent.EMPTY));
 
     // --- Creative tab ---
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
@@ -109,6 +130,9 @@ public class GestaltResonance {
                         output.accept(RESONANT_POWDER.get());
                         output.accept(SOUL_VESSEL_EMPTY.get());
                         output.accept(SOUL_VESSEL_FRAGILE.get());
+                        output.accept(FILE_117_AMEN_BREAK.get());
+                        output.accept(FILE_42069_THE_GESTALT.get());
+                        output.accept(FILE_WRITABLE.get());
                     }).build());
 
     public static net.minecraft.resources.ResourceLocation id(String path) {
@@ -214,6 +238,7 @@ public class GestaltResonance {
                 state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             }
             // Disarm Phase Out and Phase Court on logout — state should not survive reconnect.
+            AmenBreakPower1G.disarm(player);
             AmenBreakPower2G.disarm(player);
             AmenBreakPower3G.disarm(player);
             AmenBreakPower3S.disarm(player);
@@ -231,6 +256,8 @@ public class GestaltResonance {
             }
 
             dismissAllOwnedBodyDoubles(player);
+            var srv = player.getServer();
+            if (srv != null) SpillwaysLightManager.clearAllForPlayer(srv, player.getUUID());
         }
     }
 
@@ -247,6 +274,7 @@ public class GestaltResonance {
             BodyDoubleEntity.dismissExistingDoubles(level, uuid);
             SpawnIllusionEntity.dismissExistingIllusions(level, uuid);
             TimePhaseBodyDoubleEntity.dismissExistingDoubles(level, uuid);
+            TearProjectileEntity.dismissAllOwned(level, uuid);
         }
     }
 
@@ -255,6 +283,7 @@ public class GestaltResonance {
     public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
+        AmenBreakPower1G.disarm(player);
         AmenBreakPower2G.disarm(player);
         AmenBreakPower3G.disarm(player);
         AmenBreakPower3S.disarm(player);
@@ -314,6 +343,7 @@ public class GestaltResonance {
         var server = event.getServer();
         GestaltDelayedPlacer.tick(server);
         DrowningDamageTracker.tick(server);
+        SpillwaysLightManager.tick(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             LedgeGrabLogic.tickPlayer(player);
             WallSlideLogic.tickPlayer(player);

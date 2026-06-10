@@ -40,8 +40,8 @@ public class GestaltAttackEvents {
 
     // --- Hitbox: twice normal melee reach, vanilla-width sweep ---
     public static final double ATTACK_REACH      = 3.0; // blocks in look direction
-    public static final double HITBOX_HALF_WIDTH = 1.0; // blocks each side perpendicular
-    public static final double HITBOX_HALF_HEIGHT = 1.25;
+    public static final double HITBOX_HALF_WIDTH = 0.5; // blocks each side perpendicular
+    public static final double HITBOX_HALF_HEIGHT = 1.0;
 
     // --- Per-player server-side chain state (not synced, lives only on server) ---
     private static final Map<UUID, ChainData> chainMap     = new HashMap<>();

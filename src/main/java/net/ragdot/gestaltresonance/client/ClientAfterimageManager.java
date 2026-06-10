@@ -77,17 +77,30 @@ public final class ClientAfterimageManager {
         MultiBufferSource.BufferSource buffer = mc.renderBuffers().bufferSource();
 
         for (ClientAfterimage ghost : AFTERIMAGES.values()) {
-            Entity source = level.getEntity(ghost.sourceEntityId);
-            if (!(source instanceof LivingEntity living)) continue;
+            EntityModel<LivingEntity> model;
+            ResourceLocation texture;
+            int packedLight;
 
-            @SuppressWarnings("unchecked")
-            EntityRenderer<LivingEntity> renderer =
-                    (EntityRenderer<LivingEntity>) mc.getEntityRenderDispatcher().getRenderer(living);
-            if (!(renderer instanceof LivingEntityRenderer<?, ?> livingRenderer)) continue;
-
-            @SuppressWarnings("unchecked")
-            EntityModel<LivingEntity> model = (EntityModel<LivingEntity>) livingRenderer.getModel();
-            ResourceLocation texture = renderer.getTextureLocation(living);
+            if (ghost.cachedTexture != null && ghost.cachedRenderer != null) {
+                @SuppressWarnings("unchecked")
+                EntityModel<LivingEntity> m = (EntityModel<LivingEntity>) ghost.cachedRenderer.getModel();
+                model = m;
+                texture = ghost.cachedTexture;
+                packedLight = 0xF000F0; // max light — entity may no longer be in the level
+            } else {
+                Entity source = level.getEntity(ghost.sourceEntityId);
+                if (!(source instanceof LivingEntity living)) continue;
+                @SuppressWarnings("unchecked")
+                EntityRenderer<LivingEntity> renderer =
+                        (EntityRenderer<LivingEntity>) mc.getEntityRenderDispatcher().getRenderer(living);
+                if (!(renderer instanceof LivingEntityRenderer<?, ?> livingRenderer)) continue;
+                @SuppressWarnings("unchecked")
+                EntityModel<LivingEntity> m = (EntityModel<LivingEntity>) livingRenderer.getModel();
+                model = m;
+                texture = renderer.getTextureLocation(living);
+                packedLight = mc.getEntityRenderDispatcher().getPackedLightCoords(living,
+                        event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            }
 
             poseStack.pushPose();
             poseStack.translate(ghost.x - camX, ghost.y - camY, ghost.z - camZ);
@@ -95,7 +108,6 @@ public final class ClientAfterimageManager {
             poseStack.translate(0f, -1.5f, 0f);
 
             int color = colorWithOpacity(ghost.opacity, ghost.tint);
-            int packedLight = mc.getEntityRenderDispatcher().getPackedLightCoords(living, event.getPartialTick().getGameTimeDeltaPartialTick(false));
             model.renderToBuffer(poseStack,
                     buffer.getBuffer(RenderType.entityTranslucentCull(texture)),
                     packedLight, OverlayTexture.NO_OVERLAY, color);

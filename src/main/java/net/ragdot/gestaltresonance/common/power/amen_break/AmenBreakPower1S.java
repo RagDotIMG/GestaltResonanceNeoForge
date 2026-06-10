@@ -205,6 +205,7 @@ public final class AmenBreakPower1S {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         if (!player.isCreative()) GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1S_COOLDOWN);
+        GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.POWER_1S_COOLDOWN);
         if (bypassPrimeableCheck) GestaltNetworking.syncPhaseCourtToPlayer(player);
 
         // Remove block and spawn primed entity

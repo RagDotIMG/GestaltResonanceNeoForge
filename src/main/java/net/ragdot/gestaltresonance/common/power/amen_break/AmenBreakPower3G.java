@@ -271,7 +271,7 @@ public final class AmenBreakPower3G {
         Entity markedEntity = player.level().getEntity(state.getBreakCoreMarkedEntityId());
         if (!(markedEntity instanceof LivingEntity living) || !living.isAlive()) {
             if (markedEntity != null) {
-                releaseAllBankedDamage(player, state, markedEntity.position());
+                releaseAllBankedDamage(player, state, markedEntity.position().add(0, markedEntity.getBbHeight() * 0.5, 0));
             }
             clearAfterimages(player, state);
             state.clearBreakCoreState();
@@ -315,7 +315,7 @@ public final class AmenBreakPower3G {
         if (!(markedEntity instanceof LivingEntity living) || !living.isAlive()) {
             // Target died during dragback — release banked damage at current position and clear
             if (markedEntity != null) {
-                releaseAllBankedDamage(player, state, markedEntity.position());
+                releaseAllBankedDamage(player, state, markedEntity.position().add(0, markedEntity.getBbHeight() * 0.5, 0));
             }
             clearAfterimages(player, state);
             state.clearBreakCoreState();
@@ -461,7 +461,7 @@ public final class AmenBreakPower3G {
         if (target instanceof Mob mob) {
             mob.setNoAi(true);
         }
-        Vec3 lockPos = target.position();
+        Vec3 lockPos = target.position().add(0, target.getBbHeight() * 0.5, 0);
 
         // Save state before hurt() so the death-prevention listener sees the target ID
         state.setBreakCoreUsed(true);

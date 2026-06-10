@@ -64,7 +64,7 @@ public final class GestaltSkinRegistry {
                         new SkinUnlockCondition.GestaltLevel(15))
         ));
 
-        // ── Spillways ─────────────────────────────────────────────────────────
+        // ── spillways ─────────────────────────────────────────────────────────
         ResourceLocation spillways = ResourceLocation.fromNamespaceAndPath(GestaltResonance.MODID, "spillways");
         SKINS.put(spillways, List.of(
                 new GestaltSkin(skinId("spillways", "default"),

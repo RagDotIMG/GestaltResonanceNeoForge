@@ -98,6 +98,8 @@ public class GestaltNetworking {
         registrar.playToClient(SyncResonanceS2C.TYPE, SyncResonanceS2C.STREAM_CODEC, GestaltNetworking::handleSyncResonance);
         // Cooldown HUD sync (owning client only)
         registrar.playToClient(SyncCooldownS2C.TYPE, SyncCooldownS2C.STREAM_CODEC, GestaltNetworking::handleSyncCooldown);
+        // Per-power-slot cooldown overlay sync (owning client only)
+        registrar.playToClient(SyncPowerCooldownS2C.TYPE, SyncPowerCooldownS2C.STREAM_CODEC, GestaltNetworking::handleSyncPowerCooldown);
         // Hit-chain particle burst
         registrar.playToClient(SpawnHitParticlesS2C.TYPE, SpawnHitParticlesS2C.STREAM_CODEC, GestaltNetworking::handleSpawnHitParticles);
         // Phase Out (Power 2G)
@@ -107,10 +109,14 @@ public class GestaltNetworking {
         registrar.playToClient(SyncPhaseCourtS2C.TYPE, SyncPhaseCourtS2C.STREAM_CODEC, GestaltNetworking::handleSyncPhaseCourt);
         // Time Phase (Power 3S)
         registrar.playToClient(SyncTimePhaseS2C.TYPE, SyncTimePhaseS2C.STREAM_CODEC, GestaltNetworking::handleSyncTimePhase);
+        // Ghost translucency broadcast (Phase Court + Time Phase) — sent to all tracking clients
+        registrar.playToClient(SyncPlayerGhostS2C.TYPE, SyncPlayerGhostS2C.STREAM_CODEC, GestaltNetworking::handleSyncPlayerGhost);
         // Client-only afterimages (used by Time Phase and Phase Court — recipient-only visuals)
         registrar.playToClient(SpawnAfterimageS2C.TYPE, SpawnAfterimageS2C.STREAM_CODEC, GestaltNetworking::handleSpawnAfterimage);
         registrar.playToClient(DiscardAfterimageS2C.TYPE, DiscardAfterimageS2C.STREAM_CODEC, GestaltNetworking::handleDiscardAfterimage);
         registrar.playToClient(ClearAfterimagesS2C.TYPE, ClearAfterimagesS2C.STREAM_CODEC, GestaltNetworking::handleClearAfterimages);
+        // Dusty Documents (writable file save)
+        registrar.playToServer(SaveDustyDocC2S.TYPE, SaveDustyDocC2S.STREAM_CODEC, GestaltNetworking::handleSaveDustyDoc);
     }
 
     private static void handleAttackInput(AttackInputC2S packet, IPayloadContext ctx) {
@@ -317,8 +323,12 @@ public class GestaltNetworking {
 
                 if (state.isSummoned() && !wasSummoned) {
                     serverPlayer.playNotifySound(GestaltSounds.GESTALT_SUMMON.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+                    serverPlayer.level().playSound(serverPlayer, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
+                            GestaltSounds.GESTALT_SUMMON.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
                 } else if (!state.isSummoned() && wasSummoned) {
                     serverPlayer.playNotifySound(GestaltSounds.GESTALT_DISMISS.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+                    serverPlayer.level().playSound(serverPlayer, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
+                            GestaltSounds.GESTALT_DISMISS.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
                 }
                 GestaltResonance.LOGGER.debug("Gestalt toggled for {}: summoned={}, id={}",
                         serverPlayer.getName().getString(), state.isSummoned(), state.getGestaltId());
@@ -693,6 +703,16 @@ public class GestaltNetworking {
                 new SyncCooldownS2C(serverPlayer.getId(), totalTicks));
     }
 
+    private static void handleSyncPowerCooldown(SyncPowerCooldownS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() ->
+                net.ragdot.gestaltresonance.client.PowerCooldownClient.set(packet.index(), packet.totalTicks()));
+    }
+
+    /** Notify the owning player's client that a per-slot power cooldown just started. */
+    public static void syncPowerCooldown(ServerPlayer serverPlayer, int index, int totalTicks) {
+        PacketDistributor.sendToPlayer(serverPlayer, new SyncPowerCooldownS2C(index, totalTicks));
+    }
+
     /** Send the current resonance value to the owning player's client. */
     public static void syncResonanceToPlayer(ServerPlayer serverPlayer) {
         PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
@@ -855,6 +875,9 @@ public class GestaltNetworking {
             state.setPhaseOutActive(packet.active());
             state.setPhaseOutCooldownTicks(packet.cooldownTicks());
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            // 2G (POWER_2, GUARD): slot=1, modifier=1 → 1×3+1 = 4
+            net.ragdot.gestaltresonance.client.PowerCooldownClient.setFromRemaining(
+                    4, packet.cooldownTicks(), GestaltCosts.PHASE_OUT_COOLDOWN_TICKS);
             if (onPhaseOutStateCallback != null) {
                 onPhaseOutStateCallback.accept(packet);
             }
@@ -877,6 +900,9 @@ public class GestaltNetworking {
             state.setBreakCoreUsed(packet.breakCoreUsed());
             state.setPhaseCourtCooldownTicks(packet.cooldownTicks());
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            // 3G (POWER_3, GUARD): slot=2, modifier=1 → 2×3+1 = 7
+            net.ragdot.gestaltresonance.client.PowerCooldownClient.setFromRemaining(
+                    7, packet.cooldownTicks(), GestaltCosts.PHASE_COURT_COOLDOWN_TICKS);
             if (onPhaseCourtStateCallback != null) {
                 onPhaseCourtStateCallback.accept(packet);
             }
@@ -893,6 +919,7 @@ public class GestaltNetworking {
                         state.isBreakCoreUsed(),
                         state.getPhaseCourtCooldownTicks(),
                         state.getPhaseCourtPostHitTick() > 0));
+        syncPlayerGhostToTracking(serverPlayer);
     }
 
     // ── Time Phase (Power 3S) ─────────────────────────────────────────────────
@@ -905,6 +932,9 @@ public class GestaltNetworking {
             state.setTimePhasePredictionPhase(packet.predictionPhase());
             state.setTimePhaseTicksRemaining(packet.ticksRemaining());
             state.setTimePhaseCooldownTicks(packet.cooldownTicks());
+            // 3S (POWER_3, SNEAK): slot=2, modifier=2 → 2×3+2 = 8
+            net.ragdot.gestaltresonance.client.PowerCooldownClient.setFromRemaining(
+                    8, packet.cooldownTicks(), GestaltCosts.TIME_PHASE_COOLDOWN_TICKS);
             state.setTimePhaseBodyDoubleId(packet.bodyDoubleEntityId());
             state.setTimePhaseTrackedCount(packet.trackedCount());
             int[] ids = state.getTimePhaseTrackedIds();
@@ -929,6 +959,33 @@ public class GestaltNetworking {
                         state.getTimePhaseBodyDoubleId(),
                         state.getTimePhaseTrackedCount(),
                         ids));
+        syncPlayerGhostToTracking(serverPlayer);
+    }
+
+    /**
+     * Broadcast ghost/translucency state to all clients tracking this player.
+     * Lets other players see Phase Court and Time Phase opacity effects.
+     */
+    public static void syncPlayerGhostToTracking(ServerPlayer serverPlayer) {
+        PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        PacketDistributor.sendToPlayersTrackingEntityAndSelf(serverPlayer,
+                new SyncPlayerGhostS2C(
+                        serverPlayer.getId(),
+                        state.isPhaseCourtActive(),
+                        state.isTimePhaseActive()));
+    }
+
+    private static void handleSyncPlayerGhost(SyncPlayerGhostS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.level == null) return;
+            net.minecraft.world.entity.Entity entity = mc.level.getEntity(packet.entityId());
+            if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            state.setPhaseCourtActive(packet.phaseCourtActive());
+            state.setTimePhaseActive(packet.timePhaseActive());
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        });
     }
 
     // ── Client-only afterimages (Time Phase + Phase Court) ───────────────────
@@ -984,6 +1041,29 @@ public class GestaltNetworking {
     public static java.util.function.Consumer<DiscardAfterimageS2C> onDiscardAfterimageCallback = null;
     /** Client-side callback: clear all client-side afterimages. */
     public static Runnable onClearAfterimagesCallback = null;
+
+    // ── Dusty Documents (writable file) ─────────────────────────────────────
+
+    private static void handleSaveDustyDoc(SaveDustyDocC2S packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (!(ctx.player() instanceof ServerPlayer serverPlayer)) return;
+            int slot = packet.slot();
+            if (slot < 0 || slot > 40) return;
+            net.minecraft.world.item.ItemStack stack = serverPlayer.getInventory().getItem(slot);
+            if (!(stack.getItem() instanceof net.ragdot.gestaltresonance.common.item.DustyDocumentsWritableItem)) return;
+
+            var pageObjects = packet.pages().stream()
+                    .map(net.minecraft.server.network.Filterable::passThrough)
+                    .collect(java.util.stream.Collectors.toList());
+            stack.set(net.minecraft.core.component.DataComponents.WRITABLE_BOOK_CONTENT,
+                    new net.minecraft.world.item.component.WritableBookContent(pageObjects));
+
+            packet.title().ifPresentOrElse(
+                    title -> stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                            net.minecraft.network.chat.Component.literal(title)),
+                    () -> stack.remove(net.minecraft.core.component.DataComponents.CUSTOM_NAME));
+        });
+    }
 
     /** Send the current Phase Out state to the owning player's client. */
     public static void syncPhaseOutToPlayer(ServerPlayer serverPlayer) {

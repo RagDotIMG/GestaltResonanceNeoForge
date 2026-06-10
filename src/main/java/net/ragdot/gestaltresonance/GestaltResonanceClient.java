@@ -8,11 +8,16 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.ragdot.gestaltresonance.common.item.DustyDocumentsItem;
+import net.ragdot.gestaltresonance.common.item.DustyDocumentsWritableItem;
+import net.ragdot.gestaltresonance.client.gui.DustyDocumentsEditScreen;
 import net.ragdot.gestaltresonance.common.item.SoulVesselEmptyItem;
+import net.ragdot.gestaltresonance.client.gui.DustyDocumentsScreen;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -27,6 +32,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.ragdot.gestaltresonance.client.GestaltCooldownHud;
+import net.ragdot.gestaltresonance.client.GestaltHudAssets;
 import net.ragdot.gestaltresonance.client.GestaltStatusHud;
 import net.ragdot.gestaltresonance.client.GestaltKeybinds;
 import net.ragdot.gestaltresonance.client.PhaseCourtClientHandler;
@@ -90,15 +96,36 @@ public class GestaltResonanceClient {
         NeoForge.EVENT_BUS.addListener(GestaltResonanceHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(GestaltStatusHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientHandler::onCameraAngles);
-        NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onFogColor);
-        NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderFog);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, true, PhaseCourtClientHandler::onFogColor);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, true, PhaseCourtClientHandler::onRenderFog);
         NeoForge.EVENT_BUS.addListener(PhaseCourtClientHandler::onRenderGui);
         NeoForge.EVENT_BUS.addListener(ClientAfterimageManager::onClientLevelTick);
         NeoForge.EVENT_BUS.addListener(ClientAfterimageManager::onRenderLevelStage);
-        GestaltNetworking.onSpawnAfterimageCallback = packet -> ClientAfterimageManager.add(
-                new net.ragdot.gestaltresonance.client.ClientAfterimage(
-                        packet.id(), packet.x(), packet.y(), packet.z(),
-                        packet.sourceEntityId(), packet.opacity(), packet.fadeRate(), packet.tint()));
+        GestaltNetworking.onSpawnAfterimageCallback = packet -> {
+            Minecraft mc2 = Minecraft.getInstance();
+            net.minecraft.client.multiplayer.ClientLevel lvl = mc2.level;
+            net.minecraft.resources.ResourceLocation cachedTex = null;
+            net.minecraft.client.renderer.entity.LivingEntityRenderer<?, ?> cachedRend = null;
+            if (lvl != null) {
+                net.minecraft.world.entity.Entity ent = lvl.getEntity(packet.sourceEntityId());
+                if (ent instanceof net.minecraft.world.entity.LivingEntity le) {
+                    net.minecraft.client.renderer.entity.EntityRenderer<?> r =
+                            mc2.getEntityRenderDispatcher().getRenderer(le);
+                    if (r instanceof net.minecraft.client.renderer.entity.LivingEntityRenderer<?, ?> lr) {
+                        cachedRend = lr;
+                        @SuppressWarnings("unchecked")
+                        net.minecraft.resources.ResourceLocation tex =
+                                ((net.minecraft.client.renderer.entity.EntityRenderer<net.minecraft.world.entity.LivingEntity>) r)
+                                        .getTextureLocation(le);
+                        cachedTex = tex;
+                    }
+                }
+            }
+            ClientAfterimageManager.add(new net.ragdot.gestaltresonance.client.ClientAfterimage(
+                    packet.id(), packet.x(), packet.y(), packet.z(),
+                    packet.sourceEntityId(), packet.opacity(), packet.fadeRate(), packet.tint(),
+                    cachedTex, cachedRend));
+        };
         GestaltNetworking.onDiscardAfterimageCallback = packet -> ClientAfterimageManager.remove(packet.id());
         GestaltNetworking.onClearAfterimagesCallback = ClientAfterimageManager::clear;
         // Soul projection client-side input gating (block break/place/use) and movement prediction
@@ -138,8 +165,37 @@ public class GestaltResonanceClient {
         // Bridge: Phase Court post-hit freeze starts → screen shake.
         GestaltNetworking.onPhaseCourtStateCallback = GestaltResonanceClient::onPhaseCourtState;
 
+        // HUD asset registry — one block per gestalt, no edits to rendering classes needed.
+        GestaltHudAssets.registerHudIcon(GestaltIds.AMEN_BREAK,
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab_hud_icon"));
+        GestaltHudAssets.registerPowerIcons(GestaltIds.AMEN_BREAK, new ResourceLocation[][] {
+            {
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab1b"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab1s"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab1g")
+            },
+            {
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab2b"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab2s"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab2g")
+            },
+            {
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab3b"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab3s"),
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/amen_break/ab3g")
+            }
+        });
+        GestaltHudAssets.registerHudIcon(GestaltIds.SPILLWAYS,
+                ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/spillways/sw_hud_icon"));
+
         // Bridge: local player's gestalt crash → status icon cooldown fill.
         GestaltNetworking.onSelfCrashCallback = GestaltStatusHud::onSelfCrash;
+
+        // Bridge: Dusty Documents right-click → open document screen.
+        DustyDocumentsItem.openScreenCallback = content -> Minecraft.getInstance().setScreen(new DustyDocumentsScreen(content));
+        // Bridge: FILE - Writable right-click → open document editor.
+        DustyDocumentsWritableItem.openScreenCallback = (player, stack, hand) ->
+                Minecraft.getInstance().setScreen(new DustyDocumentsEditScreen(player, stack, hand));
 
         // Bridge: hit-chain impact packet → single wind-charge gust particle.
         GestaltNetworking.onHitParticlesCallback = packet -> {

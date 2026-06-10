@@ -49,18 +49,18 @@ public class GestaltMiningEvents {
     }
 
     /**
-     * Cancels the F-key offhand swap when the gestalt is summoned and the player's main
-     * hand slot is actually empty. Without this, getMainHandItem() returns the virtual
-     * tool via PlayerMainHandMixin and the swap deposits it as a real item in the offhand.
+     * Fixes the F-key offhand swap when the gestalt is summoned. LivingSwapItemsEvent.Hands
+     * captures toOffHand by calling getMainHandItem() in its constructor — which on the server
+     * always returns the virtual tool via PlayerMainHandMixin, regardless of the actual held item.
+     * Replacing toOffHand with the real inventory slot item before the swap is written prevents
+     * the virtual tool from being materialised as a real ItemStack in the offhand.
      */
     @SubscribeEvent
     public void onSwapHandItems(LivingSwapItemsEvent.Hands event) {
         if (!(event.getEntity() instanceof Player player)) return;
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
-        if (player.getInventory().getSelected().isEmpty()) {
-            event.setCanceled(true);
-        }
+        event.setItemSwappedToOffHand(player.getInventory().getSelected().copy());
     }
 
     /**

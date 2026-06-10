@@ -3,7 +3,7 @@
   "package": "net.ragdot.gestaltresonance.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": ["BlockCollisionMixin", "EntityMixin", "ServerPlayerMixin", "PlayerMainHandMixin", "PlayerHasCorrectToolMixin"],
-  "client": ["LivingEntitySwingMixin", "LivingEntityRendererTranslucencyMixin", "LivingEntityRendererSkipGearMixin", "PlayerRendererHandTranslucencyMixin", "ItemInHandRendererSkipItemMixin", "EntityRenderDispatcherTimePhaseMixin"],
+  "client": ["LivingEntitySwingMixin", "LivingEntityRendererTranslucencyMixin", "EntityModelGhostMixin", "LivingEntityRendererSkipGearMixin", "PlayerRendererHandTranslucencyMixin", "ItemInHandRendererSkipItemMixin", "EntityRenderDispatcherTimePhaseMixin"],
   "injectors": {
     "defaultRequire": 1
   },

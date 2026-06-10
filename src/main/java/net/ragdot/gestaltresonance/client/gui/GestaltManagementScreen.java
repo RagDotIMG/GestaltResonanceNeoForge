@@ -13,6 +13,8 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.ChatFormatting;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.Util;
@@ -26,6 +28,7 @@ import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.SelectGestaltSkinC2S;
+import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
 import net.ragdot.gestaltresonance.common.skin.GestaltSkin;
 import net.ragdot.gestaltresonance.common.skin.GestaltSkinRegistry;
 
@@ -45,6 +48,14 @@ public class GestaltManagementScreen extends Screen {
     private static final int PANEL_HEIGHT = 200;
 
     private static final String[] POWER_COLS = {"B", "S", "G"};
+    private static final String[] POWER_COL_LETTERS = {"b", "s", "g"};
+    // Maps grid column index to GestaltPowerModifier ordinal — needed because the enum declares
+    // NONE(0), GUARD(1), SNEAK(2) but the grid columns are ordered B(NONE), S(SNEAK), G(GUARD).
+    private static final int[] GRID_COL_TO_MODIFIER_ORDINAL = {
+        GestaltPowerModifier.NONE.ordinal(),
+        GestaltPowerModifier.SNEAK.ordinal(),
+        GestaltPowerModifier.GUARD.ordinal()
+    };
 
     private final PlayerGestaltState state;
     private final List<GestaltSkin> availableSkins;
@@ -129,6 +140,7 @@ public class GestaltManagementScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        long now = Minecraft.getInstance().level != null ? Minecraft.getInstance().level.getGameTime() : 0L;
         renderTransparentBackground(g);
         super.render(g, mouseX, mouseY, partialTick);
 
@@ -159,7 +171,15 @@ public class GestaltManagementScreen extends Screen {
         renderStats(g, leftX + PANEL_WIDTH / 2 + 10, topY + 24);
 
         // ── Power grid ──
-        renderPowerGrid(g, leftX + PANEL_WIDTH / 2 + 10, topY + 110);
+        int gridX = leftX + PANEL_WIDTH / 2 + 10;
+        int gridY = topY + 110;
+        renderPowerGrid(g, gridX, gridY, now);
+
+        // ── Power grid tooltip ──
+        List<Component> tooltip = getPowerTooltip(gridX, gridY, mouseX, mouseY);
+        if (tooltip != null) {
+            g.renderComponentTooltip(this.font, tooltip, mouseX, mouseY);
+        }
     }
 
     private void renderStats(GuiGraphics g, int x, int y) {
@@ -178,7 +198,7 @@ public class GestaltManagementScreen extends Screen {
         g.drawString(this.font, "RES: " + stats.resonance(),  x, y + lh * 5, color);
     }
 
-    private void renderPowerGrid(GuiGraphics g, int x, int y) {
+    private void renderPowerGrid(GuiGraphics g, int x, int y, long now) {
         int cell = 24;
         int gap = 4;
         int origin = y;
@@ -214,13 +234,59 @@ public class GestaltManagementScreen extends Screen {
                 g.fill(cx, rowY, cx + 1, rowY + cell, border);
                 g.fill(cx + cell - 1, rowY, cx + cell, rowY + cell, border);
 
-                // Required-level label centered in cell — no per-cell tier/category text;
-                // the row + column headers already disambiguate.
-                String reqLabel = "L" + required;
-                int rlw = this.font.width(reqLabel);
-                g.drawString(this.font, reqLabel, cx + (cell - rlw) / 2, rowY + cell / 2 - 4, textColor);
+                if (unlocked) {
+                    ResourceLocation icon = powerIconFor(state.getGestaltId(), r, c);
+                    if (icon != null) {
+                        g.blitSprite(icon, cx + 1, rowY + 1, cell - 2, cell - 2);
+                    } else {
+                        String reqLabel = "L" + required;
+                        int rlw = this.font.width(reqLabel);
+                        g.drawString(this.font, reqLabel, cx + (cell - rlw) / 2, rowY + cell / 2 - 4, textColor);
+                    }
+                    // Cooldown overlay: dark from top, revealed bottom-to-top as cooldown expires
+                    float cdFill = net.ragdot.gestaltresonance.client.PowerCooldownClient.getOverlayFill(r * 3 + GRID_COL_TO_MODIFIER_ORDINAL[c], now);
+                    if (cdFill >= 0f) {
+                        int darkH = Math.round((1.0f - cdFill) * (cell - 2));
+                        if (darkH > 0) {
+                            g.fill(cx + 1, rowY + 1, cx + cell - 1, rowY + 1 + darkH, 0xBB000000);
+                        }
+                    }
+                } else {
+                    String reqLabel = "L" + required;
+                    int rlw = this.font.width(reqLabel);
+                    g.drawString(this.font, reqLabel, cx + (cell - rlw) / 2, rowY + cell / 2 - 4, textColor);
+                }
             }
         }
+    }
+
+    private static ResourceLocation powerIconFor(ResourceLocation gestaltId, int row, int col) {
+        return net.ragdot.gestaltresonance.client.GestaltHudAssets.getPowerIcon(gestaltId, row, col);
+    }
+
+    private List<Component> getPowerTooltip(int gridX, int gridY, int mouseX, int mouseY) {
+        int cell = 24;
+        int gap = 4;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                int cx = gridX + 18 + c * (cell + gap);
+                int cy = gridY + r * (cell + gap);
+                if (mouseX >= cx && mouseX < cx + cell && mouseY >= cy && mouseY < cy + cell) {
+                    String base = "gestalt." + state.getGestaltId().getNamespace() + "."
+                            + state.getGestaltId().getPath() + ".power_" + (r + 1) + POWER_COL_LETTERS[c];
+                    String nameKey = base + ".name";
+                    if (!Language.getInstance().has(nameKey)) return null;
+                    List<Component> lines = new ArrayList<>();
+                    lines.add(Component.translatable(nameKey).withStyle(ChatFormatting.YELLOW));
+                    String descKey = base + ".desc";
+                    if (Language.getInstance().has(descKey)) {
+                        lines.add(Component.translatable(descKey).withStyle(ChatFormatting.GRAY));
+                    }
+                    return lines;
+                }
+            }
+        }
+        return null;
     }
 
     private void renderGestaltPreview(GuiGraphics g, int cx, int cy, float partialTick) {

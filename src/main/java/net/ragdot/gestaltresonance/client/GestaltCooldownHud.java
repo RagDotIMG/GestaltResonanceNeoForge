@@ -3,8 +3,11 @@ package net.ragdot.gestaltresonance.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.Optional;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.ragdot.gestaltresonance.common.GestaltAction;
@@ -144,10 +147,21 @@ public class GestaltCooldownHud {
     }
 
     private static boolean isCrosshairTargetValid(LocalPlayer player, PlayerGestaltState state) {
-        Entity picked = Minecraft.getInstance().crosshairPickEntity;
-        if (!(picked instanceof LivingEntity le) || !le.isAlive()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return false;
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         int rng = (stats != null) ? stats.range() : 0;
-        return player.distanceTo(le) <= 1 + 2 * rng;
+        double range = 1.0 + 2.0 * rng;
+
+        Vec3 eye = player.getEyePosition();
+        Vec3 end = eye.add(player.getLookAngle().scale(range));
+        AABB sweep = new AABB(eye, end).inflate(1.0);
+
+        for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, sweep,
+                en -> en != player && en.isAlive())) {
+            Optional<Vec3> hit = e.getBoundingBox().inflate(0.3).clip(eye, end);
+            if (hit.isPresent()) return true;
+        }
+        return false;
     }
 }

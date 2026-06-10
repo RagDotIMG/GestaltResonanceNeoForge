@@ -69,6 +69,7 @@ public final class AmenBreakPower3B {
             state.setPowerCooldown(KEY.slot(), KEY.modifier(), currentTick + GestaltCosts.PHASE_BLOSSOM_COOLDOWN_TICKS);
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.PHASE_BLOSSOM_COOLDOWN_TICKS);
+            GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.PHASE_BLOSSOM_COOLDOWN_TICKS);
 
             GestaltResonance.LOGGER.debug("AmenBreak Phase Blossom 3B: dismissed for {}", player.getName().getString());
 
@@ -77,9 +78,14 @@ public final class AmenBreakPower3B {
             net.minecraft.world.item.ItemStack heldItem = player.getInventory().getSelected();
             boolean hasCatalyst = !heldItem.isEmpty()
                     && GestaltCosts.POWER_3_CATALYSTS.contains(heldItem.getItem());
-            if (!player.isCreative() && !hasCatalyst && state.getTotalGestaltXp() < GestaltCosts.PHASE_BLOSSOM_XP_COST) {
-                playFail(player);
-                return;
+            if (!player.isCreative() && !hasCatalyst) {
+                int resonanceAvailable = Math.max(0, state.getResonanceValue());
+                int resonanceDrain = Math.min(GestaltCosts.PHASE_BLOSSOM_XP_COST, resonanceAvailable);
+                int xpCost = GestaltCosts.PHASE_BLOSSOM_XP_COST - resonanceDrain;
+                if (state.getTotalGestaltXp() < xpCost) {
+                    playFail(player);
+                    return;
+                }
             }
 
             HitResult hit = player.pick(GestaltCosts.PHASE_BLOSSOM_PLACE_RANGE, 0.0f, false);
@@ -104,9 +110,18 @@ public final class AmenBreakPower3B {
                 if (hasCatalyst) {
                     heldItem.shrink(1);
                 } else {
-                    state.spendGestaltXp(GestaltCosts.PHASE_BLOSSOM_XP_COST);
+                    int resonanceDrain = Math.min(GestaltCosts.PHASE_BLOSSOM_XP_COST,
+                            Math.max(0, state.getResonanceValue()));
+                    int xpCost = GestaltCosts.PHASE_BLOSSOM_XP_COST - resonanceDrain;
+                    if (resonanceDrain > 0) {
+                        state.setResonanceValue(state.getResonanceValue() - resonanceDrain);
+                        GestaltNetworking.syncResonanceToPlayer(player);
+                    }
+                    if (xpCost > 0) {
+                        state.spendGestaltXp(xpCost);
+                        GestaltNetworking.syncGestaltXpToPlayer(player);
+                    }
                     player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
-                    GestaltNetworking.syncGestaltXpToPlayer(player);
                 }
             }
 

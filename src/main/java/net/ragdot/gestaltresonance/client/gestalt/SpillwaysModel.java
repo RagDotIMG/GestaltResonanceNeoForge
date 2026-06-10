@@ -9,7 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.ragdot.gestaltresonance.GestaltResonance;
 
 /**
- * Model for the Spillways gestalt.
+ * Model for the spillways gestalt.
  * Made with Blockbench 5.0.7.
  */
 public class SpillwaysModel extends GestaltModel {
@@ -60,17 +60,17 @@ public class SpillwaysModel extends GestaltModel {
 
     @Override
     protected AnimationDefinition hit1Animation() {
-        return SpillwaysAnimations.PUNCH;
+        return SpillwaysAnimations.HIT1;
     }
 
     @Override
     protected AnimationDefinition hit2Animation() {
-        return SpillwaysAnimations.PUNCH;
+        return SpillwaysAnimations.HIT2;
     }
 
     @Override
     protected AnimationDefinition hit3Animation() {
-        return SpillwaysAnimations.PUNCH;
+        return SpillwaysAnimations.HIT3;
     }
 
     @Override

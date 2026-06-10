@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,12 +27,22 @@ public abstract class EntityRenderDispatcherTimePhaseMixin {
             PoseStack pose, MultiBufferSource buf, int packedLight, CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-        if (!state.isTimePhaseActive()) return;
-        if (entity == mc.player) return;
-        if (entity.getId() == state.getTimePhaseBodyDoubleId()) return;
-        int[] tracked = state.getTimePhaseTrackedIds();
-        int count = state.getTimePhaseTrackedCount();
+
+        // Suppress shadow for any player (self or observed) who is in Time Phase
+        if (entity instanceof Player p) {
+            PlayerGestaltState pState = p.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            if (pState.isTimePhaseActive()) {
+                ci.cancel();
+                return;
+            }
+        }
+
+        // Suppress shadow for mobs tracked by the local player's Time Phase
+        PlayerGestaltState localState = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        if (!localState.isTimePhaseActive()) return;
+        if (entity.getId() == localState.getTimePhaseBodyDoubleId()) return;
+        int[] tracked = localState.getTimePhaseTrackedIds();
+        int count = localState.getTimePhaseTrackedCount();
         for (int i = 0; i < count; i++) {
             if (tracked[i] == entity.getId()) {
                 ci.cancel();

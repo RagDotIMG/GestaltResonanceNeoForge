@@ -176,6 +176,8 @@ public class GestaltThrowEvents {
                 boolean transferred = applyFallBreakKill(sp, event);
                 GestaltNetworking.broadcastFallBreakImpact(sp);
                 sp.playNotifySound(GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+                sp.level().playSound(sp, sp.getX(), sp.getY(), sp.getZ(),
+                        GestaltSounds.GESTALT_HEAVY_IMPACT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
                 if (!transferred && rawDistance >= GestaltCosts.FALL_BREAK_CRASH_DISTANCE) {
                     GestaltAcquisitionEvents.crashGestalt(sp);
                 }

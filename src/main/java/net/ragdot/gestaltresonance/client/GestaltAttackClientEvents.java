@@ -3,9 +3,14 @@ package net.ragdot.gestaltresonance.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.ragdot.gestaltresonance.common.GestaltStats;
+import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
+
+import java.util.Optional;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -116,10 +121,28 @@ public class GestaltAttackClientEvents {
         }
     }
 
-    /** Returns the id of the LivingEntity the crosshair is pointing at, or -1. Server validates range. */
+    /** Raycasts forward up to the gestalt's charged-strike range and returns the closest LivingEntity id, or -1. */
     private static int pickTargetEntityId(Minecraft mc) {
-        Entity picked = mc.crosshairPickEntity;
-        if (picked instanceof LivingEntity le && le.isAlive()) return le.getId();
-        return -1;
+        if (mc.player == null || mc.level == null) return -1;
+        PlayerGestaltState state = mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
+        int rng = (stats != null) ? stats.range() : 0;
+        double range = 1.0 + 2.0 * rng;
+
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 end = eye.add(mc.player.getLookAngle().scale(range));
+        AABB sweep = new AABB(eye, end).inflate(1.0);
+
+        Entity best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, sweep,
+                en -> en != mc.player && en.isAlive())) {
+            Optional<Vec3> hit = e.getBoundingBox().inflate(0.3).clip(eye, end);
+            if (hit.isPresent()) {
+                double d = eye.distanceToSqr(hit.get());
+                if (d < bestDist) { best = e; bestDist = d; }
+            }
+        }
+        return best != null ? best.getId() : -1;
     }
 }

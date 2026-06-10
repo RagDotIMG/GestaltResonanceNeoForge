@@ -183,7 +183,7 @@ public class GestaltChargedStrikeEvents {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         int rng = (stats != null) ? stats.range() : 0;
-        return 1 + 2 * rng;
+        return 3 + 2 * rng;
     }
 
     // -------------------------------------------------------------------------

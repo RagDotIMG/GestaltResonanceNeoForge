@@ -103,6 +103,7 @@ public final class AmenBreakPower1G {
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.POWER_1G_WINDUP);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1G_COOLDOWN_TICKS);
+        GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.POWER_1G_COOLDOWN_TICKS);
 
         GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G activated for {}", player.getName().getString());
     }
@@ -180,7 +181,7 @@ public final class AmenBreakPower1G {
         }
 
         // Track current position in case the entity dies between ticks
-        state.setMarkedEntityLastPos(living.position());
+        state.setMarkedEntityLastPos(living.position().add(0, living.getBbHeight() * 0.5, 0));
 
         int remaining = state.getMarkedEntityTicksRemaining();
         if (remaining > 0) {
@@ -220,7 +221,7 @@ public final class AmenBreakPower1G {
         // Mark for delayed explosion. If the hit killed the target, tickMark will detect
         // !isAlive() next tick and detonate at the last-known (death) position.
         state.setMarkedEntityId(target.getId());
-        state.setMarkedEntityLastPos(target.position());
+        state.setMarkedEntityLastPos(target.position().add(0, target.getBbHeight() * 0.5, 0));
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
     }
 
@@ -278,6 +279,28 @@ public final class AmenBreakPower1G {
         GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.IDLE);
         GestaltResonance.LOGGER.debug("AmenBreak Queen Killer 1G aborted (took damage) for {}", player.getName().getString());
         // Cooldown stays set — no refund.
+    }
+
+    /** Called on death / logout. Clears windup action and any active mark without detonating. */
+    public static void disarm(ServerPlayer player) {
+        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        boolean changed = false;
+
+        if (state.getAction() == GestaltAction.POWER_1G_WINDUP) {
+            state.setAction(GestaltAction.IDLE);
+            state.setPowerWindupStartTick(-1L);
+            GestaltNetworking.syncAttackActionToTracking(player, GestaltAction.IDLE);
+            changed = true;
+        }
+
+        if (state.getMarkedEntityId() >= 0) {
+            state.clearMark();
+            changed = true;
+        }
+
+        if (changed) {
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+        }
     }
 
     private static void playFail(ServerPlayer player) {

@@ -1,6 +1,7 @@
 {
   "replace": false,
   "entries": [
-    "gestaltresonance:helper_book_in_chests"
+    "gestaltresonance:helper_book_in_chests",
+    "gestaltresonance:gestalt_documents"
   ]
 }

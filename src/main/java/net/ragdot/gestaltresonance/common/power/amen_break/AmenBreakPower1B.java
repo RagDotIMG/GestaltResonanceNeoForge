@@ -71,6 +71,7 @@ public final class AmenBreakPower1B {
 
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.POWER_1B_COOLDOWN_TICKS);
+        GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.POWER_1B_COOLDOWN_TICKS);
 
         PopPodEntity pod = new PopPodEntity(GestaltEntities.POP_POD.get(), player, player.level());
         pod.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0f, 1.2f, 0.5f);

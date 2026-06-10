@@ -135,6 +135,7 @@ public final class SpillwaysPower2B {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
         GestaltNetworking.syncGestaltXpToPlayer(player);
         GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.SPILLWAYS_LACHRYMA_COOLDOWN_TICKS);
+        GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.SPILLWAYS_LACHRYMA_COOLDOWN_TICKS);
     }
 
     private SpillwaysPower2B() {}

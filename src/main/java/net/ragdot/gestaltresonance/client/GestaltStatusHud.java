@@ -26,9 +26,9 @@ import net.ragdot.gestaltresonance.common.PlayerGestaltState;
  */
 public class GestaltStatusHud {
 
-    // Each gestalt supplies its own icon sprite; only Amen Break exists so far.
-    private static final ResourceLocation SPRITE_AB =
-            ResourceLocation.fromNamespaceAndPath("gestaltresonance", "hud/ab_hud_icon");
+    private static ResourceLocation spriteFor(ResourceLocation gestaltId) {
+        return GestaltHudAssets.getHudIcon(gestaltId);
+    }
 
     private static final int ICON_SIZE = 32;
 
@@ -65,17 +65,19 @@ public class GestaltStatusHud {
 
         int screenW = event.getGuiGraphics().guiWidth();
         int screenH = event.getGuiGraphics().guiHeight();
-        // Left of hotbar (hotbar left edge = screenW/2 - 91), 3px gap, vertically centred then raised 5px.
+        // Left of hotbar (hotbar left edge = screenW/2 - 91), 3px gap, raised above hotbar.
+        // 10px clearance = resonance bar (5px with borders) + gaps above/below.
         int iconX   = screenW / 2 - 91 - 3 - ICON_SIZE;
-        int iconY   = screenH - 22 + (22 - ICON_SIZE) / 2 - 5;
-
-        ResourceLocation sprite = SPRITE_AB;
+        int iconY   = screenH - 22 - ICON_SIZE - 10;
 
         // ── 1. No gestalt — hide entirely ───────────────────────────────────
         if (state.getGestaltId().equals(PlayerGestaltState.NONE)) {
             prevSummoned = false;
             return;
         }
+
+        ResourceLocation sprite = spriteFor(state.getGestaltId());
+        if (sprite == null) return; // gestalt has no registered HUD icon
 
         // ── 2. Crash cooldown — dark blue with fill ──────────────────────────
         if (crashCooldownStart >= 0) {

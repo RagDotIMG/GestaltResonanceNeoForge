@@ -26,9 +26,9 @@ public class GestaltExplosionParticle extends TextureSheetParticle {
         this.hasPhysics = true;
         this.gravity = 0.04f;
         this.friction = 0.82f;
-        this.xd = dx + (random.nextDouble() - 0.5) * 0.5;
-        this.yd = dy + 0.1 + random.nextDouble() * 0.3;
-        this.zd = dz + (random.nextDouble() - 0.5) * 0.5;
+        this.xd = dx + (random.nextDouble() - 0.5) * 0.8;
+        this.yd = dy + (random.nextDouble() - 0.5) * 0.8;
+        this.zd = dz + (random.nextDouble() - 0.5) * 0.8;
         this.quadSize = 0.2f + random.nextFloat() * 0.15f;
         this.pickSprite(sprites);
     }

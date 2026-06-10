@@ -64,6 +64,7 @@ public final class AmenBreakPower2B {
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             GestaltNetworking.syncGestaltXpToPlayer(player);
             GestaltNetworking.syncCooldownToPlayer(player, GestaltCosts.ILLUSION_COOLDOWN);
+            GestaltNetworking.syncPowerCooldown(player, KEY.slot().ordinal() * 3 + KEY.modifier().ordinal(), GestaltCosts.ILLUSION_COOLDOWN);
 
             GestaltIllusionEvents.expire(existing, false);
 

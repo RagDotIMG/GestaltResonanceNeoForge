@@ -1,9 +1,11 @@
 package net.ragdot.gestaltresonance.client.entity;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidArmorModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
@@ -20,13 +22,25 @@ import java.util.UUID;
 public class TimePhaseBodyDoubleRenderer
         extends LivingEntityRenderer<TimePhaseBodyDoubleEntity, HumanoidModel<TimePhaseBodyDoubleEntity>> {
 
+    private final HumanoidModel<TimePhaseBodyDoubleEntity> wideModel;
+    private final HumanoidModel<TimePhaseBodyDoubleEntity> slimModel;
+
     public TimePhaseBodyDoubleRenderer(EntityRendererProvider.Context context) {
         super(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5f);
+        this.wideModel = this.model;
+        this.slimModel = new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_SLIM));
         addLayer(new HumanoidArmorLayer<>(this,
                 new HumanoidArmorModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
                 new HumanoidArmorModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
                 context.getModelManager()));
         addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
+    }
+
+    @Override
+    public void render(TimePhaseBodyDoubleEntity entity, float entityYaw, float partialTick,
+                       PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+        this.model = entity.isSlim() ? slimModel : wideModel;
+        super.render(entity, entityYaw, partialTick, poseStack, buffer, packedLight);
     }
 
     @Override

@@ -46,5 +46,9 @@
   "gestalt.wallslide": {
     "subtitle": "subtitles.gestaltresonance.gestalt.wallslide",
     "sounds": [ "gestaltresonance:gestalt/wallslide" ]
+  },
+  "gestalt.amen_break_ambi": {
+    "subtitle": "subtitles.gestaltresonance.gestalt.amen_break_ambi",
+    "sounds": [ { "name": "gestaltresonance:gestalt/amen_break_ambi", "stream": true } ]
   }
 }

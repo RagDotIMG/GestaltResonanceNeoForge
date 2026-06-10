@@ -13,6 +13,7 @@ public class GestaltLootModifiers {
 
     public static void register(IEventBus bus) {
         SERIALIZERS.register("helper_book_in_chests", () -> HelperBookLootModifier.CODEC);
+        SERIALIZERS.register("gestalt_documents", () -> GestaltDocumentLootModifier.CODEC);
         SERIALIZERS.register(bus);
     }
 }

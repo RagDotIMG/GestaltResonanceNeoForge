@@ -36,6 +36,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltEntities;
+import net.ragdot.gestaltresonance.common.SpillwaysLightManager;
 
 public class TearProjectileEntity extends Entity {
 
@@ -78,6 +79,8 @@ public class TearProjectileEntity extends Entity {
     private int lifetimeTicks = 0;
     @Nullable private LivingEntity cachedTarget = null;
     private boolean falling = false;
+    private boolean locked = false;
+    @Nullable private BlockPos tearLightPos = null;
 
     // Required by EntityType.Builder
     public TearProjectileEntity(EntityType<? extends TearProjectileEntity> type, Level level) {
@@ -100,6 +103,24 @@ public class TearProjectileEntity extends Entity {
 
     public boolean isOwnedBy(UUID uuid) {
         return uuid.equals(ownerUUID);
+    }
+
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void lock() {
+        this.locked = true;
+        this.lifetimeTicks = 0;
+        setDeltaMovement(Vec3.ZERO);
+    }
+
+    public static void dismissAllOwned(ServerLevel level, UUID ownerUUID) {
+        List<TearProjectileEntity> tears = new java.util.ArrayList<>(
+                level.getEntities(GestaltEntities.TEAR_PROJECTILE.get(), e -> e.isOwnedBy(ownerUUID)));
+        for (TearProjectileEntity tear : tears) {
+            tear.discardClean(level);
+        }
     }
 
     @Nullable
@@ -145,6 +166,20 @@ public class TearProjectileEntity extends Entity {
 
         if (falling) {
             tickFalling(serverLevel);
+            if (!isRemoved()) updateTearLight(serverLevel);
+            return;
+        }
+
+        // Locked: hover in place, no targeting or interactions, extended lifetime
+        if (locked) {
+            if (lifetimeTicks > GestaltCosts.TEARS_FOR_FEARS_LOCKED_MAX_LIFETIME) {
+                discardClean(serverLevel);
+                return;
+            }
+            double bob = Math.sin(lifetimeTicks * 0.2) * 0.01;
+            setDeltaMovement(0, bob, 0);
+            move(MoverType.SELF, getDeltaMovement());
+            if (!isRemoved()) updateTearLight(serverLevel);
             return;
         }
 
@@ -173,8 +208,9 @@ public class TearProjectileEntity extends Entity {
             return;
         }
 
-        // Refresh cached entity target only when lost or invalidated
-        if (cachedTarget == null || !cachedTarget.isAlive() || isExcluded(cachedTarget)) {
+        // Refresh cached entity target when lost, invalidated, or target is already drowning
+        if (cachedTarget == null || !cachedTarget.isAlive() || isExcluded(cachedTarget)
+                || (isHostile(cachedTarget) && DrowningDamageTracker.isTracked(cachedTarget.getUUID()))) {
             cachedTarget = findBestTarget(serverLevel);
         }
 
@@ -194,6 +230,7 @@ public class TearProjectileEntity extends Entity {
         checkEntityContact(serverLevel);
         if (isRemoved()) return;
         checkBlockContact(serverLevel);
+        if (!isRemoved()) updateTearLight(serverLevel);
     }
 
     private void tickFalling(ServerLevel level) {
@@ -212,7 +249,7 @@ public class TearProjectileEntity extends Entity {
         if (isRemoved()) return;
         // Discard when landing on any solid surface
         if (!level.getBlockState(blockPosition().below()).isAir()) {
-            discard();
+            discardClean(level);
         }
     }
 
@@ -249,9 +286,9 @@ public class TearProjectileEntity extends Entity {
             if (!isExcluded(e) && !isHostile(e) && e.getHealth() < e.getMaxHealth()) return e;
         }
 
-        // Priority 3: hostile
+        // Priority 3: hostile (skip ones already drowning from another bubble)
         for (LivingEntity e : candidates) {
-            if (!isExcluded(e) && isHostile(e)) return e;
+            if (!isExcluded(e) && isHostile(e) && !DrowningDamageTracker.isTracked(e.getUUID())) return e;
         }
 
         return null;
@@ -305,14 +342,14 @@ public class TearProjectileEntity extends Entity {
 
             if (isHostile(entity)) {
                 applyHostileEffect(entity, level, urgency);
-                discard();
+                discardClean(level);
                 return;
             }
 
             // Passive: only triggers if entity was on fire or injured
             if (wasOnFire || entity.getHealth() < entity.getMaxHealth()) {
                 applyPassiveEffect(entity, urgency);
-                discard();
+                discardClean(level);
                 return;
             }
             // Otherwise pass through — no discard
@@ -359,7 +396,7 @@ public class TearProjectileEntity extends Entity {
             level.setBlock(pos,
                     (fluid.isSource() ? Blocks.OBSIDIAN : Blocks.COBBLESTONE).defaultBlockState(),
                     Block.UPDATE_ALL);
-            discard();
+            discardClean(level);
             return true;
         }
 
@@ -372,11 +409,11 @@ public class TearProjectileEntity extends Entity {
         // 3. Sponge
         if (state.is(Blocks.SPONGE)) {
             level.setBlock(pos, Blocks.WET_SPONGE.defaultBlockState(), Block.UPDATE_ALL);
-            discard();
+            discardClean(level);
             return true;
         }
         if (state.is(Blocks.WET_SPONGE)) {
-            discard();
+            discardClean(level);
             return true;
         }
 
@@ -384,14 +421,14 @@ public class TearProjectileEntity extends Entity {
         Block concrete = CONCRETE_MAP.get(state.getBlock());
         if (concrete != null) {
             level.setBlock(pos, concrete.defaultBlockState(), Block.UPDATE_ALL);
-            discard();
+            discardClean(level);
             return true;
         }
 
         // 5. Dirt / farmland — 3×3 hydrate + bonemeal; always dissolve on contact
         if (state.is(BlockTags.DIRT) || state.is(Blocks.FARMLAND)) {
             handleDirt(level, pos);
-            discard();
+            discardClean(level);
             return true;
         }
 
@@ -399,7 +436,7 @@ public class TearProjectileEntity extends Entity {
         if (state.is(Blocks.OBSIDIAN)) {
             if (level.random.nextFloat() < 0.05f) {
                 level.setBlock(pos, Blocks.CRYING_OBSIDIAN.defaultBlockState(), Block.UPDATE_ALL);
-                discard();
+                discardClean(level);
             }
             return true;
         }
@@ -409,7 +446,7 @@ public class TearProjectileEntity extends Entity {
         if (mossy != null) {
             if (level.random.nextFloat() < 0.05f) {
                 level.setBlock(pos, copySharedProperties(state, mossy.defaultBlockState()), Block.UPDATE_ALL);
-                discard();
+                discardClean(level);
             }
             return true;
         }
@@ -436,7 +473,7 @@ public class TearProjectileEntity extends Entity {
                 }
             }
         }
-        if (affectedAny) discard();
+        if (affectedAny) discardClean(level);
     }
 
     private void handleDirt(ServerLevel level, BlockPos hitPos) {
@@ -477,6 +514,43 @@ public class TearProjectileEntity extends Entity {
     @SuppressWarnings("unchecked")
     private static <T extends Comparable<T>> BlockState applyProperty(BlockState from, BlockState to, Property<T> prop) {
         return to.setValue(prop, from.getValue(prop));
+    }
+
+    // ── Dynamic lighting ──────────────────────────────────────────────────────
+
+    private void updateTearLight(ServerLevel level) {
+        BlockPos currentPos = blockPosition();
+        if (currentPos.equals(tearLightPos)) return;
+
+        if (tearLightPos != null) {
+            if (level.getBlockState(tearLightPos).is(Blocks.LIGHT)) {
+                level.setBlock(tearLightPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+            tearLightPos = null;
+            SpillwaysLightManager.unregisterTearLight(getUUID());
+        }
+
+        if (level.getBlockState(currentPos).isAir()) {
+            level.setBlock(currentPos,
+                Blocks.LIGHT.defaultBlockState()
+                    .setValue(BlockStateProperties.LEVEL, GestaltCosts.TEARS_LIGHT_LEVEL),
+                Block.UPDATE_CLIENTS);
+            tearLightPos = currentPos;
+            if (ownerUUID != null) {
+                SpillwaysLightManager.registerTearLight(ownerUUID, getUUID(), level.dimension(), currentPos);
+            }
+        }
+    }
+
+    private void discardClean(ServerLevel level) {
+        if (tearLightPos != null) {
+            if (level.getBlockState(tearLightPos).is(Blocks.LIGHT)) {
+                level.setBlock(tearLightPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+            tearLightPos = null;
+            SpillwaysLightManager.unregisterTearLight(getUUID());
+        }
+        discard();
     }
 
     // ── NBT ───────────────────────────────────────────────────────────────────
