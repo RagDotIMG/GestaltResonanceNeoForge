@@ -11,6 +11,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -28,6 +29,8 @@ import net.ragdot.gestaltresonance.common.block.PopSproutBlock;
 
 import javax.annotation.Nullable;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,6 +45,8 @@ public class SpawnIllusionEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_OWNER_UUID_STR =
             SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> DATA_BODY_DOUBLE_MODE =
+            SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_IS_SLIM =
             SynchedEntityData.defineId(SpawnIllusionEntity.class, EntityDataSerializers.BOOLEAN);
     // Equipment slots for body double rendering (MAINHAND, OFFHAND, FEET, LEGS, CHEST, HEAD)
     private static final EntityDataAccessor<ItemStack> DATA_SLOT_MAINHAND =
@@ -60,6 +65,10 @@ public class SpawnIllusionEntity extends PathfinderMob {
     @Nullable private UUID ownerUuid;
     private Vec3 forwardDirection = new Vec3(0, 0, 1);
     private int ageTicks = 0;
+    /** Walk-to target set at spawn from the owner's look direction. Falls back to forwardDirection if null. */
+    @Nullable private Vec3 destination = null;
+    /** PopSprout positions already visited; never targeted again. */
+    private final Set<BlockPos> visitedSprouts = new HashSet<>();
 
     public SpawnIllusionEntity(EntityType<? extends SpawnIllusionEntity> type, Level level) {
         super(type, level);
@@ -77,6 +86,9 @@ public class SpawnIllusionEntity extends PathfinderMob {
 
     public void setBodyDoubleMode(boolean v) { entityData.set(DATA_BODY_DOUBLE_MODE, v); }
     public boolean isBodyDoubleMode() { return entityData.get(DATA_BODY_DOUBLE_MODE); }
+
+    public void setSlim(boolean slim) { entityData.set(DATA_IS_SLIM, slim); }
+    public boolean isSlim() { return entityData.get(DATA_IS_SLIM); }
 
     public void copyEquipmentFrom(Player player) {
         entityData.set(DATA_SLOT_MAINHAND, player.getItemBySlot(EquipmentSlot.MAINHAND).copy());
@@ -120,12 +132,16 @@ public class SpawnIllusionEntity extends PathfinderMob {
         return entityData.get(DATA_AGE);
     }
 
+    public void setDestination(Vec3 dest) {
+        this.destination = dest;
+    }
+
     // ── Goals ─────────────────────────────────────────────────────────────────
 
     @Override
     protected void registerGoals() {
-        goalSelector.addGoal(1, new MoveToPopSproutGoal(this));
-        goalSelector.addGoal(2, new WalkForwardGoal(this));
+        goalSelector.addGoal(1, new SproutDetourGoal(this));
+        goalSelector.addGoal(2, new WalkToDestinationGoal(this));
     }
 
     // ── Tick ─────────────────────────────────────────────────────────────────
@@ -161,7 +177,8 @@ public class SpawnIllusionEntity extends PathfinderMob {
             if (owner != null) {
                 AABB range = getBoundingBox().inflate(24.0);
                 level().getEntitiesOfClass(Mob.class, range,
-                        mob -> mob.getTarget() == owner || mob.getTarget() == null)
+                        mob -> mob instanceof Enemy
+                                && (mob.getTarget() == owner || mob.getTarget() == null))
                         .forEach(mob -> mob.setTarget(this));
             }
         }
@@ -199,6 +216,7 @@ public class SpawnIllusionEntity extends PathfinderMob {
         builder.define(DATA_AGE, 0);
         builder.define(DATA_OWNER_UUID_STR, "");
         builder.define(DATA_BODY_DOUBLE_MODE, false);
+        builder.define(DATA_IS_SLIM, false);
         builder.define(DATA_SLOT_MAINHAND, ItemStack.EMPTY);
         builder.define(DATA_SLOT_OFFHAND,  ItemStack.EMPTY);
         builder.define(DATA_SLOT_FEET,     ItemStack.EMPTY);
@@ -215,6 +233,11 @@ public class SpawnIllusionEntity extends PathfinderMob {
         tag.putDouble("FwdY", forwardDirection.y);
         tag.putDouble("FwdZ", forwardDirection.z);
         tag.putInt("AgeTicks", ageTicks);
+        if (destination != null) {
+            tag.putDouble("DestX", destination.x);
+            tag.putDouble("DestY", destination.y);
+            tag.putDouble("DestZ", destination.z);
+        }
     }
 
     @Override
@@ -225,6 +248,9 @@ public class SpawnIllusionEntity extends PathfinderMob {
         forwardDirection = new Vec3(
                 tag.getDouble("FwdX"), tag.getDouble("FwdY"), tag.getDouble("FwdZ"));
         ageTicks = tag.getInt("AgeTicks");
+        destination = tag.contains("DestX")
+                ? new Vec3(tag.getDouble("DestX"), tag.getDouble("DestY"), tag.getDouble("DestZ"))
+                : null;
     }
 
     /** Remove all spawn illusions owned by the given UUID from this level. */
@@ -238,83 +264,118 @@ public class SpawnIllusionEntity extends PathfinderMob {
 
     // ── Inner goals ───────────────────────────────────────────────────────────
 
-    private static final class MoveToPopSproutGoal extends Goal {
+    /**
+     * Sprints to the nearest unvisited PopSprout, lingers 30 ticks, blacklists it, then exits.
+     * Never targets the same block twice per illusion lifetime.
+     */
+    private static final class SproutDetourGoal extends Goal {
+
+        private enum Phase { SPRINTING, LINGERING }
 
         private final SpawnIllusionEntity illusion;
-        @Nullable private BlockPos target;
+        @Nullable private Phase phase = null;
+        @Nullable private BlockPos targetSprout = null;
+        private int lingerTimer = 0;
 
-        MoveToPopSproutGoal(SpawnIllusionEntity illusion) {
+        SproutDetourGoal(SpawnIllusionEntity illusion) {
             this.illusion = illusion;
             setFlags(EnumSet.of(Flag.MOVE));
         }
 
-        private @Nullable BlockPos findTarget() {
+        private @Nullable BlockPos findUnvisited() {
             if (!(illusion.level() instanceof ServerLevel sl)) return null;
             return PopSproutTracker.get(sl.getServer())
-                    .findNewestInRange(sl, illusion.position(),
-                            GestaltCosts.ILLUSION_POPSPROUT_SCAN_RADIUS);
+                    .findNewestInRangeExcluding(sl, illusion.position(),
+                            GestaltCosts.ILLUSION_POPSPROUT_SCAN_RADIUS, illusion.visitedSprouts);
         }
 
         @Override
         public boolean canUse() {
-            target = findTarget();
-            return target != null;
+            targetSprout = findUnvisited();
+            return targetSprout != null;
         }
 
         @Override
         public boolean canContinueToUse() {
-            if (target == null) return false;
-            // Check if targeted block still exists
-            if (!(illusion.level().getBlockState(target).getBlock() instanceof PopSproutBlock)) {
-                target = findTarget();
-            } else {
-                // Switch to a newer sprout if one appeared
-                BlockPos newest = findTarget();
-                if (newest != null && !newest.equals(target)) target = newest;
-            }
-            return target != null;
-        }
-
-        @Override
-        public void tick() {
-            if (target == null) return;
-            if (illusion.blockPosition().closerThan(target, 1.5)) {
-                illusion.getNavigation().stop();
-            } else {
-                illusion.getNavigation().moveTo(
-                        target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.4);
-            }
-        }
-    }
-
-    private static final class WalkForwardGoal extends Goal {
-
-        private final SpawnIllusionEntity illusion;
-
-        WalkForwardGoal(SpawnIllusionEntity illusion) {
-            this.illusion = illusion;
-            setFlags(EnumSet.of(Flag.MOVE));
-        }
-
-        @Override
-        public boolean canUse() {
-            return true;
+            return phase != null;
         }
 
         @Override
         public void start() {
-            requestPath();
+            phase = Phase.SPRINTING;
         }
 
         @Override
         public void tick() {
-            if (!illusion.getNavigation().isInProgress()) {
-                requestPath();
+            if (phase == Phase.SPRINTING) {
+                if (targetSprout == null) { phase = null; return; }
+                // Sprout vanished — blacklist it and find another
+                if (!(illusion.level().getBlockState(targetSprout).getBlock() instanceof PopSproutBlock)) {
+                    illusion.visitedSprouts.add(targetSprout);
+                    targetSprout = findUnvisited();
+                    if (targetSprout == null) { phase = null; return; }
+                }
+                if (illusion.blockPosition().closerThan(targetSprout, 1.5)) {
+                    illusion.getNavigation().stop();
+                    illusion.visitedSprouts.add(targetSprout);
+                    lingerTimer = 0;
+                    phase = Phase.LINGERING;
+                } else {
+                    illusion.getNavigation().moveTo(
+                            targetSprout.getX() + 0.5, targetSprout.getY(),
+                            targetSprout.getZ() + 0.5, 1.4);
+                }
+            } else if (phase == Phase.LINGERING) {
+                if (++lingerTimer >= 30) phase = null;
             }
         }
 
-        private void requestPath() {
-            Vec3 dest = illusion.position().add(illusion.forwardDirection.scale(20.0));
+        @Override
+        public void stop() {
+            phase = null;
+            targetSprout = null;
+            lingerTimer = 0;
+            illusion.getNavigation().stop();
+        }
+    }
+
+    /**
+     * Walks the illusion toward the destination set at spawn. Falls back to the spawn
+     * forward direction if no destination was provided.
+     */
+    private static final class WalkToDestinationGoal extends Goal {
+
+        private final SpawnIllusionEntity illusion;
+        private int renavTimer = 0;
+
+        WalkToDestinationGoal(SpawnIllusionEntity illusion) {
+            this.illusion = illusion;
+            setFlags(EnumSet.of(Flag.MOVE));
+        }
+
+        @Override public boolean canUse() { return true; }
+        @Override public boolean canContinueToUse() { return true; }
+
+        @Override
+        public void start() {
+            renavTimer = 0;
+            navigate();
+        }
+
+        @Override
+        public void tick() {
+            if (illusion.getNavigation().isInProgress()) {
+                renavTimer = 0;
+            } else if (++renavTimer >= 20) {
+                renavTimer = 0;
+                navigate();
+            }
+        }
+
+        private void navigate() {
+            Vec3 dest = illusion.destination != null
+                    ? illusion.destination
+                    : illusion.position().add(illusion.forwardDirection.scale(20.0));
             illusion.getNavigation().moveTo(dest.x, dest.y, dest.z, 1.0);
         }
     }

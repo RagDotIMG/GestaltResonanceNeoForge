@@ -92,6 +92,29 @@ public class PopSproutTracker extends SavedData {
         return null;
     }
 
+    /**
+     * Like {@link #findNewestInRange} but skips any positions contained in {@code excluded}.
+     * Used by the P3T illusion so it never revisits a sprout it already triggered.
+     */
+    @javax.annotation.Nullable
+    public BlockPos findNewestInRangeExcluding(ServerLevel level, net.minecraft.world.phys.Vec3 center,
+                                               double radius, java.util.Set<BlockPos> excluded) {
+        double rSq = radius * radius;
+        ResourceKey<Level> dim = level.dimension();
+        for (LinkedList<DimPos> list : sprouts.values()) {
+            var it = list.descendingIterator();
+            while (it.hasNext()) {
+                DimPos dp = it.next();
+                if (!dp.dim().equals(dim)) continue;
+                if (excluded.contains(dp.pos())) continue;
+                if (dp.pos().distToCenterSqr(center.x, center.y, center.z) > rSq) continue;
+                if (!(level.getBlockState(dp.pos()).getBlock() instanceof PopSproutBlock)) continue;
+                return dp.pos();
+            }
+        }
+        return null;
+    }
+
     /** Remove a sprout from tracking (called when it detonates or is broken). */
     public void removeSprout(UUID playerUuid, BlockPos pos) {
         LinkedList<DimPos> list = sprouts.get(playerUuid);

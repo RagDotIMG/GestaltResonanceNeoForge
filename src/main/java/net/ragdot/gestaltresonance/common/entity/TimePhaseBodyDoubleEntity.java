@@ -1,6 +1,5 @@
 package net.ragdot.gestaltresonance.common.entity;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -40,7 +39,6 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import javax.annotation.Nullable;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.UUID;
 
 /**

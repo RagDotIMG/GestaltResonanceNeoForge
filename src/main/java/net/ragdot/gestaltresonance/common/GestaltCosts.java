@@ -97,9 +97,6 @@ public final class GestaltCosts {
     public static final double[] CHARGED_STRIKE_TRAVEL_SPEED_BY_SPD =
             { 0.0, 0.20, 0.45, 0.60, 0.75, -1.0 };
 
-    /** Tick within HIT_3 at which the charged-strike damage lands; mirrors GestaltAttackEvents.DAMAGE_TICK. */
-    public static final int CHARGED_STRIKE_DAMAGE_TICK = 3;
-
     /** Total HIT_3 lifetime for a charged strike (damage tick + animation length). The gestalt
      *  snaps back to IDLE at the end so it doesn't linger on the target. */
     public static final int CHARGED_STRIKE_HIT3_DURATION_TICKS = 13;
@@ -302,9 +299,6 @@ public final class GestaltCosts {
     /** Base explosion damage for pop blocks — scaled by gestalt level. */
     public static final float POWER_1B_EXPLOSION_BASE_DAMAGE = 4.0f;
 
-    /** Distance (blocks) within which a PopSprout triggers on a nearby mob. */
-    public static final double POP_SPROUT_TRIGGER_DISTANCE = 2.5;
-
     /** Max fire blocks spread when a PopPod hits lava. */
     public static final int LAVA_FIRE_SPREAD_COUNT = 4;
 
@@ -396,7 +390,7 @@ public final class GestaltCosts {
 
     public static final int   ILLUSION_SPAWN_COST            = 15;
     public static final int   ILLUSION_TELEPORT_COST         = 5;
-    public static final int   ILLUSION_LIFETIME              = 200;
+    public static final int   ILLUSION_LIFETIME              = 240;
     public static final int   ILLUSION_FADE_START            = 150;
     public static final int   ILLUSION_FADE_DURATION         = 40;
     public static final float ILLUSION_BASE_OPACITY          = 0.75f;
@@ -406,6 +400,8 @@ public final class GestaltCosts {
     public static final int   ILLUSION_POPSPROUT_SCAN_RADIUS = 16;
     public static final float ILLUSION_EXPLOSION_BASE_RADIUS = 2.5f;
     public static final float ILLUSION_EXPLOSION_BASE_DAMAGE = 4.0f;
+    /** Raytrace range (blocks) used to pick the illusion's destination from the player's look direction. */
+    public static final double ILLUSION_DESTINATION_RANGE    = 40.0;
 
     // ── Amen Break What bombs at Midnight (Power 2S) ─────────────────────────
 
@@ -499,9 +495,6 @@ public final class GestaltCosts {
 
     /** ADD_MULTIPLIED_BASE speed modifier applied to the player during the window. */
     public static final double TIME_PHASE_CATCHUP_SLOW           = -0.9;
-
-    /** Blocks ahead the body double walks in its initial facing direction when no PopSprout is in range. */
-    public static final double TIME_PHASE_BODY_DOUBLE_WALK_DIST  = 12.0;
 
     /** XZ random spread (blocks) added to each entity's computed destination on Time Skip. */
     public static final double TIME_PHASE_DESTINATION_RADIUS     = 8.0;

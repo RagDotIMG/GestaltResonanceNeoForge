@@ -28,7 +28,7 @@ public class GestaltDocumentLootModifier extends LootModifier {
 
         new Entry(
             () -> GestaltResonance.FILE_117_AMEN_BREAK.get(),
-            0.03f,
+            0.05f,
             Set.of(
                 ResourceLocation.withDefaultNamespace("archaeology/desert_pyramid"),
                 ResourceLocation.withDefaultNamespace("archaeology/desert_well")

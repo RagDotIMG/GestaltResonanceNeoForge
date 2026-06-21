@@ -58,5 +58,19 @@
 
   "item.gestaltresonance.file_117_amen_break": "FILE 117 - AMEN BREAK -",
   "item.gestaltresonance.file_42069_the_gestalt": "FILE 42069 - The Gestalt",
-  "item.gestaltresonance.file_writable": "FILE - Writable"
+  "item.gestaltresonance.file_writable": "FILE - Writable",
+
+  "subtitles.gestaltresonance.gestalt.birth": "Gestalt appears",
+  "subtitles.gestaltresonance.gestalt.dissolve": "Gestalt dissolves",
+  "subtitles.gestaltresonance.gestalt.summon": "Gestalt summoned",
+  "subtitles.gestaltresonance.gestalt.dismiss": "Gestalt dismissed",
+  "subtitles.gestaltresonance.gestalt.awaken": "Gestalt awakens",
+  "subtitles.gestaltresonance.gestalt.heavy_impact": "Heavy impact",
+  "subtitles.gestaltresonance.gestalt.fail": "Action failed",
+  "subtitles.gestaltresonance.gestalt.levelup": "Gestalt levels up",
+  "subtitles.gestaltresonance.gestalt.ab_2g": "Phase Out activates",
+  "subtitles.gestaltresonance.gestalt.hit": "Gestalt strikes",
+  "subtitles.gestaltresonance.gestalt.explosion": "Explosion",
+  "subtitles.gestaltresonance.gestalt.wallslide": "Wall slide",
+  "subtitles.gestaltresonance.gestalt.amen_break_ambi": "Amen Break ambience"
 }

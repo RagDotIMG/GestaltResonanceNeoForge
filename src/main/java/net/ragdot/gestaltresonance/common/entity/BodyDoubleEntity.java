@@ -30,6 +30,8 @@ public class BodyDoubleEntity extends LivingEntity {
             SynchedEntityData.defineId(BodyDoubleEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> DATA_OWNER_NAME =
             SynchedEntityData.defineId(BodyDoubleEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Boolean> DATA_IS_SLIM =
+            SynchedEntityData.defineId(BodyDoubleEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Snapshot of the owner's equipment at projection time. Synced to the client so the
     // body double's renderer can show the owner's armor/held items.
@@ -61,6 +63,7 @@ public class BodyDoubleEntity extends LivingEntity {
         super.defineSynchedData(builder);
         builder.define(DATA_OWNER_UUID_STR, "");
         builder.define(DATA_OWNER_NAME, "");
+        builder.define(DATA_IS_SLIM, false);
         builder.define(DATA_HELMET, ItemStack.EMPTY);
         builder.define(DATA_CHEST, ItemStack.EMPTY);
         builder.define(DATA_LEGS, ItemStack.EMPTY);
@@ -78,6 +81,9 @@ public class BodyDoubleEntity extends LivingEntity {
         entityData.set(DATA_MAINHAND, owner.getItemBySlot(EquipmentSlot.MAINHAND).copy());
         entityData.set(DATA_OFFHAND,  owner.getItemBySlot(EquipmentSlot.OFFHAND).copy());
     }
+
+    public void setSlim(boolean slim) { entityData.set(DATA_IS_SLIM, slim); }
+    public boolean isSlim() { return entityData.get(DATA_IS_SLIM); }
 
     public void setOwner(UUID uuid, String name) {
         entityData.set(DATA_OWNER_UUID_STR, uuid.toString());

@@ -19,7 +19,6 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltIds;
 import net.ragdot.gestaltresonance.common.GestaltParticles;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
-import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.GhostPlayerHandler;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;

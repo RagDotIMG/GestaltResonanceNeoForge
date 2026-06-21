@@ -56,11 +56,9 @@ public abstract class LivingEntityRendererTranslucencyMixin {
                 }
             }
         } else if (entity instanceof SpawnIllusionEntity se) {
-            if (!se.isBodyDoubleMode()) {
-                float alpha = computeIllusionAlpha(se.getAgeTicks());
-                int a = Math.round(alpha * 255);
-                GhostRenderState.illusionArgb.set((a << 24) | (0x42 << 16) | (0x12 << 8) | 0x85);
-            }
+            float alpha = computeIllusionAlpha(se.getAgeTicks());
+            int a = Math.round(alpha * 255);
+            GhostRenderState.illusionArgb.set((a << 24) | (0x42 << 16) | (0x12 << 8) | 0x85);
         }
     }
 
@@ -77,9 +75,7 @@ public abstract class LivingEntityRendererTranslucencyMixin {
                     target = "Lnet/minecraft/client/model/EntityModel;renderToBuffer(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"),
             index = 4)
     private int gestaltresonance$modifyColor(int color) {
-        int alpha = GhostRenderState.resolveAlpha();
-        if (alpha == -1) return color;
-        return alpha | (color & 0x00FFFFFF);
+        return GhostRenderState.resolveColor(color);
     }
 
     private static float computeIllusionAlpha(int age) {

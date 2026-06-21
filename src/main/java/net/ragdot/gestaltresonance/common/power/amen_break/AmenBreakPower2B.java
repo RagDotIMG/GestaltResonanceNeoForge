@@ -2,6 +2,8 @@ package net.ragdot.gestaltresonance.common.power.amen_break;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.Vec3;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
 import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltEntities;
@@ -10,6 +12,7 @@ import net.ragdot.gestaltresonance.common.GestaltIllusionEvents;
 import net.ragdot.gestaltresonance.common.GestaltSounds;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.common.entity.SpawnIllusionEntity;
+import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerKey;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
@@ -92,6 +95,8 @@ public final class AmenBreakPower2B {
                 spawnZ = player.getZ();
             }
             illusion.setPos(spawnX, spawnY, spawnZ);
+            illusion.setSlim(TimePhaseBodyDoubleEntity.detectSlimModel(player));
+            illusion.setDestination(computeDestination(player));
             player.level().addFreshEntity(illusion);
             GestaltIllusionEvents.INSTANCE.registerIllusion(player.getUUID(), illusion);
 
@@ -99,6 +104,22 @@ public final class AmenBreakPower2B {
             player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
             GestaltNetworking.syncGestaltXpToPlayer(player);
         }
+    }
+
+    private static Vec3 computeDestination(ServerPlayer player) {
+        net.minecraft.world.phys.HitResult hit =
+                player.pick(GestaltCosts.ILLUSION_DESTINATION_RANGE, 0f, false);
+        if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            net.minecraft.world.phys.BlockHitResult bhr =
+                    (net.minecraft.world.phys.BlockHitResult) hit;
+            net.minecraft.core.BlockPos bp = bhr.getBlockPos();
+            return new Vec3(bp.getX() + 0.5, bp.getY() + 1.0, bp.getZ() + 0.5);
+        }
+        Vec3 end = player.getEyePosition()
+                .add(player.getLookAngle().scale(GestaltCosts.ILLUSION_DESTINATION_RANGE));
+        int groundY = player.level().getHeight(
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) end.x, (int) end.z);
+        return new Vec3(end.x, groundY, end.z);
     }
 
     private static void playFail(ServerPlayer player) {

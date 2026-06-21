@@ -25,7 +25,29 @@ public final class GhostRenderState {
     public static final int ALPHA_PHASE_OUT   = 0x0D << 24;
     public static final int ALPHA_PHASE_COURT = GestaltCosts.PHASE_COURT_GHOST_ALPHA << 24;
 
-    /** Returns the packed ARGB color with alpha applied, or -1 if no ghost effect is active. */
+    /**
+     * Returns the final packed ARGB to use for rendering.
+     * For illusions: replaces the full color with the purple tint ARGB.
+     * For ghost effects: replaces only the alpha, preserving the model's RGB.
+     * Returns {@code baseColor} unchanged when no effect is active.
+     */
+    public static int resolveColor(int baseColor) {
+        Integer illusion = illusionArgb.get();
+        if (illusion != null) return illusion;
+        if (projecting.get() == Boolean.TRUE) {
+            int alpha = switch (translucencyMode.get()) {
+                case 2  -> ALPHA_PHASE_OUT;
+                case 3  -> ALPHA_PHASE_COURT;
+                case 4  -> floatPlayAlpha.get() << 24;
+                default -> ALPHA_PROJECTION;
+            };
+            return alpha | (baseColor & 0x00FFFFFF);
+        }
+        return baseColor;
+    }
+
+    /** @deprecated Use {@link #resolveColor(int)} instead. */
+    @Deprecated
     public static int resolveAlpha() {
         Integer illusion = illusionArgb.get();
         if (illusion != null) return illusion;

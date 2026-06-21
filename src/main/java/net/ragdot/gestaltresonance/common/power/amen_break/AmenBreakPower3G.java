@@ -1,5 +1,6 @@
 package net.ragdot.gestaltresonance.common.power.amen_break;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
@@ -9,8 +10,12 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
@@ -121,6 +126,8 @@ public final class AmenBreakPower3G {
             bodyDouble.setPos(player.getX(), player.getY(), player.getZ());
             bodyDouble.setOwnerData(player.getUUID(), player.getLookAngle());
             bodyDouble.setBodyDoubleMode(true);
+            bodyDouble.setSlim(TimePhaseBodyDoubleEntity.detectSlimModel(player));
+            bodyDouble.setDestination(computeDestination(player));
             bodyDouble.copyEquipmentFrom(player);
             player.level().addFreshEntity(bodyDouble);
             state.setPhaseCourtBodyDoubleId(bodyDouble.getId());
@@ -631,6 +638,17 @@ public final class AmenBreakPower3G {
         attr.removeModifier(PHASE_COURT_SLOW_ID);
         attr.addOrUpdateTransientModifier(new AttributeModifier(
                 PHASE_COURT_SLOW_ID, PHASE_COURT_SLOW_AMOUNT, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
+    }
+
+    private static Vec3 computeDestination(ServerPlayer player) {
+        HitResult hit = player.pick(GestaltCosts.ILLUSION_DESTINATION_RANGE, 0f, false);
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            BlockPos bp = ((BlockHitResult) hit).getBlockPos();
+            return new Vec3(bp.getX() + 0.5, bp.getY() + 1.0, bp.getZ() + 0.5);
+        }
+        Vec3 end = player.getEyePosition().add(player.getLookAngle().scale(GestaltCosts.ILLUSION_DESTINATION_RANGE));
+        int groundY = player.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) end.x, (int) end.z);
+        return new Vec3(end.x, groundY, end.z);
     }
 
     private static void playFail(ServerPlayer player) {

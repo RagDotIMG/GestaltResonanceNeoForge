@@ -5,12 +5,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidArmorModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -39,21 +41,25 @@ public class TimePhaseBodyDoubleRenderer
     @Override
     public void render(TimePhaseBodyDoubleEntity entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-        this.model = entity.isSlim() ? slimModel : wideModel;
+        this.model = resolveSlim(entity.getOwnerUuid(), entity.isSlim()) ? slimModel : wideModel;
         super.render(entity, entityYaw, partialTick, poseStack, buffer, packedLight);
     }
 
     @Override
     public ResourceLocation getTextureLocation(TimePhaseBodyDoubleEntity entity) {
-        UUID uuid = entity.getOwnerUuid();
-        if (uuid != null) {
-            var mc = Minecraft.getInstance();
-            var connection = mc.getConnection();
-            if (connection != null) {
-                var info = connection.getPlayerInfo(uuid);
-                if (info != null) return info.getSkin().texture();
-            }
-        }
-        return DefaultPlayerSkin.getDefaultTexture();
+        PlayerInfo info = getPlayerInfo(entity.getOwnerUuid());
+        return info != null ? info.getSkin().texture() : DefaultPlayerSkin.getDefaultTexture();
+    }
+
+    private static boolean resolveSlim(UUID ownerUuid, boolean fallback) {
+        PlayerInfo info = getPlayerInfo(ownerUuid);
+        if (info != null) return info.getSkin().model() == PlayerSkin.Model.SLIM;
+        return fallback;
+    }
+
+    private static PlayerInfo getPlayerInfo(UUID uuid) {
+        if (uuid == null) return null;
+        var conn = Minecraft.getInstance().getConnection();
+        return conn != null ? conn.getPlayerInfo(uuid) : null;
     }
 }

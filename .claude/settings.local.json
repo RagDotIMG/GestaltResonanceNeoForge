@@ -101,7 +101,10 @@
       "Bash(mv /home/rag/IdeaProjects/GestaltResonanceNeoForge/src/main/resources/assets/gestaltresonance/textures/gui/sprites/hud/ab_hud_icon.png /home/rag/IdeaProjects/GestaltResonanceNeoForge/src/main/resources/assets/gestaltresonance/textures/gui/sprites/hud/amen_break/ab_hud_icon.png)",
       "Bash(xargs -I{} bash -c 'jar tf \"{}\" 2>/dev/null | grep -l \"WritableBookItem\" && echo \"{}\": || true')",
       "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -l \"LivingSwapItemsEvent\" && echo \"{}\": ')",
-      "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -l \"HierarchicalModel\" && echo \"{}\": HierarchicalModel')"
+      "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -l \"HierarchicalModel\" && echo \"{}\": HierarchicalModel')",
+      "Bash(./gradlew help *)",
+      "Bash(awk -F':' '{print $1}')",
+      "Bash(grep -r \"return.*return\\\\|;\\\\s*$\" --include=\"*.java\" src/main/java/net/ragdot/gestaltresonance/common)"
     ]
   }
 }

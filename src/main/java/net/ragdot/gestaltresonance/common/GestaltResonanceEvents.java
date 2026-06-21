@@ -119,7 +119,7 @@ public class GestaltResonanceEvents {
                 interval = GestaltCosts.DECAY_UNSUMMONED_INTERVAL;
                 rate = GestaltCosts.DECAY_UNSUMMONED_RATE;
             } else {
-                if (hasHostileMobNearby(player)) {
+                if (now % 10 == 0 && hasHostileMobNearby(player)) {
                     state.setLastHostileMobNearbyTick(now);
                     player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
                 }

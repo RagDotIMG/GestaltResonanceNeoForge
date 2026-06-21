@@ -17,6 +17,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 import net.ragdot.gestaltresonance.GestaltResonance;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleEntity;
+import net.ragdot.gestaltresonance.common.entity.TimePhaseBodyDoubleEntity;
 import net.ragdot.gestaltresonance.common.entity.BodyDoubleHitEvent;
 import net.ragdot.gestaltresonance.common.network.GestaltNetworking;
 
@@ -83,6 +84,8 @@ public class GestaltSoulProjectionEvents {
         if (!state.isSummoned()) return;
         if (!state.isAwakened()) return;
         if (state.isSoulProjecting()) return;
+        if (state.isTimePhaseActive()) return;
+        if (state.isPhaseCourtActive()) return;
         if (state.getSoulProjectionCooldownTicks() > 0) return;
         if (player.getFoodData().getFoodLevel() <= GestaltCosts.CRASH_HUNGER_THRESHOLD) return;
         if (!state.isGuarding()) return;
@@ -96,6 +99,7 @@ public class GestaltSoulProjectionEvents {
         if (bodyDouble == null) return;
         bodyDouble.setOwner(player.getUUID(), player.getName().getString());
         bodyDouble.copyEquipmentFrom(player);
+        bodyDouble.setSlim(TimePhaseBodyDoubleEntity.detectSlimModel(player));
 
         // Match owner's max health (visual consistency if a health bar shows)
         AttributeInstance maxHealth = bodyDouble.getAttribute(Attributes.MAX_HEALTH);

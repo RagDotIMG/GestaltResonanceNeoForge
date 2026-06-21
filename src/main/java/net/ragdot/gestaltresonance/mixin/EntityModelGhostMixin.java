@@ -25,8 +25,6 @@ public abstract class EntityModelGhostMixin {
                     target = "Lnet/minecraft/client/model/geom/ModelPart;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"),
             index = 4)
     private int gestaltresonance$modifyLayerColor(int color) {
-        int alpha = GhostRenderState.resolveAlpha();
-        if (alpha == -1) return color;
-        return alpha | (color & 0x00FFFFFF);
+        return GhostRenderState.resolveColor(color);
     }
 }

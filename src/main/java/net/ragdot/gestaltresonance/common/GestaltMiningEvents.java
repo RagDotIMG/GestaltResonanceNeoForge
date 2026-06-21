@@ -75,7 +75,7 @@ public class GestaltMiningEvents {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
 
-        if (!isLookingAtBlockInRange(player)) return;
+        if (!isLookingAtBlockInRange(player, state)) return;
 
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         if (stats == null) return;
@@ -107,7 +107,7 @@ public class GestaltMiningEvents {
         if (!state.isSummoned()) return;
 
         BlockPos pos = event.getPos();
-        if (!isWithinRange(player, pos)) return;
+        if (!isWithinRange(player, pos, state)) return;
 
         GestaltStats stats = GestaltStatsRegistry.getStats(state.getGestaltId());
         if (stats == null) return;
@@ -118,15 +118,13 @@ public class GestaltMiningEvents {
         }
     }
 
-    private static boolean isLookingAtBlockInRange(Player player) {
-        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+    private static boolean isLookingAtBlockInRange(Player player, PlayerGestaltState state) {
         double range = GestaltCosts.mineRangeFor(state);
         HitResult hit = player.pick(range, 0f, false);
         return hit instanceof BlockHitResult bhr && bhr.getType() != HitResult.Type.MISS;
     }
 
-    private static boolean isWithinRange(Player player, BlockPos pos) {
-        PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+    private static boolean isWithinRange(Player player, BlockPos pos, PlayerGestaltState state) {
         double range = GestaltCosts.mineRangeFor(state);
         return Vec3.atCenterOf(pos).distanceTo(player.getEyePosition()) <= range;
     }
