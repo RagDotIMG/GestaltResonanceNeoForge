@@ -8,6 +8,7 @@ import net.ragdot.gestaltresonance.common.GestaltCosts;
 import net.ragdot.gestaltresonance.common.GestaltStats;
 import net.ragdot.gestaltresonance.common.GestaltStatsRegistry;
 import net.ragdot.gestaltresonance.common.PlayerGestaltState;
+import net.ragdot.gestaltresonance.common.network.MoistAirStateSyncS2C;
 import net.ragdot.gestaltresonance.common.network.PhaseOutStateSyncS2C;
 
 /**
@@ -57,6 +58,14 @@ public class GestaltResonanceHud {
         phaseOutCanAfford = packet.canAfford();
     }
 
+    // Moist Air indicator state (updated from MoistAirStateSyncS2C)
+    private static boolean moistAirActive = false;
+
+    /** Called from GestaltNetworking callback when Moist Air state changes. */
+    public static void onMoistAirState(MoistAirStateSyncS2C packet) {
+        moistAirActive = packet.active();
+    }
+
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.options.hideGui) return;
@@ -100,7 +109,7 @@ public class GestaltResonanceHud {
         int resSeg   = maxRes / GestaltCosts.RESONANCE_SEGMENT_SIZE;
         int totalSeg = disSeg + resSeg;
 
-        if (totalSeg == 0 && !phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0) return;
+        if (totalSeg == 0 && !phaseOutArmed && !phaseOutActive && phaseOutCooldown <= 0 && !moistAirActive) return;
 
         int screenW      = event.getGuiGraphics().guiWidth();
         int screenH      = event.getGuiGraphics().guiHeight();
@@ -150,6 +159,8 @@ public class GestaltResonanceHud {
 
         // Phase Out indicator: attached to the LEFT of the bar so it doesn't overlap the hotbar.
         drawPhaseOutIndicator(graphics, barLeftX - PO_SIZE - 4, barY - 1);
+        // Moist Air indicator: same position (only one gestalt's 2G indicator shows at a time)
+        drawMoistAirIndicator(graphics, barLeftX - PO_SIZE - 4, barY - 1);
     }
 
     // Phase Out indicator constants — square 5×5 inner area
@@ -179,6 +190,18 @@ public class GestaltResonanceHud {
             g.fill(bx2 - 1, by, bx2, by2, COLOR_EQUILIBRIUM); // right
             g.fill(x, y, x + PO_SIZE, y + PO_SIZE, PO_COLOR_ARMED);
         }
+    }
+
+    private static void drawMoistAirIndicator(net.minecraft.client.gui.GuiGraphics g, int x, int y) {
+        if (!moistAirActive) return;
+        // Active: 1px white border + solid white fill (same style as Phase Out armed)
+        int bx = x - 1; int by = y - 1;
+        int bx2 = x + PO_SIZE + 1; int by2 = y + PO_SIZE + 1;
+        g.fill(bx, by,  bx2, by + 1,  COLOR_EQUILIBRIUM); // top
+        g.fill(bx, by2 - 1, bx2, by2, COLOR_EQUILIBRIUM); // bottom
+        g.fill(bx, by,  bx + 1, by2,  COLOR_EQUILIBRIUM); // left
+        g.fill(bx2 - 1, by, bx2, by2, COLOR_EQUILIBRIUM); // right
+        g.fill(x, y, x + PO_SIZE, y + PO_SIZE, PO_COLOR_ARMED);
     }
 
     /** Scales the alpha channel of an ARGB color by the given [0..1] multiplier. */

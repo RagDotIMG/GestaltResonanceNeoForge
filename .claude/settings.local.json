@@ -104,7 +104,12 @@
       "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -l \"HierarchicalModel\" && echo \"{}\": HierarchicalModel')",
       "Bash(./gradlew help *)",
       "Bash(awk -F':' '{print $1}')",
-      "Bash(grep -r \"return.*return\\\\|;\\\\s*$\" --include=\"*.java\" src/main/java/net/ragdot/gestaltresonance/common)"
+      "Bash(grep -r \"return.*return\\\\|;\\\\s*$\" --include=\"*.java\" src/main/java/net/ragdot/gestaltresonance/common)",
+      "Bash(xargs -I{} sh -c 'jar tf \"{}\" 2>/dev/null | grep -q \"AnimationState\" && echo \"{}\"')",
+      "Bash(xargs -P4 -I{} bash -c 'jar tf \"{}\" 2>/dev/null | grep -q \"AnimationState.class\" && echo \"{}\"')",
+      "Bash(javap -c -p net/minecraft/world/entity/AnimationState.class)",
+      "Bash(xargs -I{} jar tf {})",
+      "Bash(xargs -I{} sh -c 'jar xf {} net/minecraft/world/entity/monster/Creeper.java && grep -n \"explode\\\\|level\\(\\)\\\\|discard\\\\|dead\" net/minecraft/world/entity/monster/Creeper.java | head -30; rm -rf net')"
     ]
   }
 }

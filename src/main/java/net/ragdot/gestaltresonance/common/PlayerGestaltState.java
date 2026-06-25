@@ -174,6 +174,10 @@ public class PlayerGestaltState {
     /** Server-side cooldown countdown. Decrements each tick when > 0. */
     private int phaseOutCooldownTicks = 0;
 
+    // --- Moist Air state (transient, not serialized) ---
+    /** True when Moist Air (Spillways 2G) is toggled on. Resets on death/logout. */
+    private boolean moistAirActive = false;
+
     // --- Phase Court state (transient, not serialized) ---
     /** True during the 160-tick Phase Court ghost window. */
     private boolean phaseCourtActive = false;
@@ -477,6 +481,10 @@ public class PlayerGestaltState {
     public int getPhaseOutCooldownTicks() { return phaseOutCooldownTicks; }
     public void setPhaseOutCooldownTicks(int t) { phaseOutCooldownTicks = Math.max(0, t); }
     public boolean hasPhaseOutCooldown() { return phaseOutCooldownTicks > 0; }
+
+    // --- Moist Air accessors ---
+    public boolean isMoistAirActive() { return moistAirActive; }
+    public void setMoistAirActive(boolean v) { moistAirActive = v; }
 
     // --- Phase Court accessors ---
     public boolean isPhaseCourtActive() { return phaseCourtActive; }

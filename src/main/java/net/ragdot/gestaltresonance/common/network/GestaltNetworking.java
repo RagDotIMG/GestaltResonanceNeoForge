@@ -34,6 +34,7 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerModifier;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
+import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2G;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
@@ -105,6 +106,9 @@ public class GestaltNetworking {
         // Phase Out (Power 2G)
         registrar.playToServer(PhaseOutToggleC2S.TYPE, PhaseOutToggleC2S.STREAM_CODEC, GestaltNetworking::handlePhaseOutToggle);
         registrar.playToClient(PhaseOutStateSyncS2C.TYPE, PhaseOutStateSyncS2C.STREAM_CODEC, GestaltNetworking::handlePhaseOutStateSync);
+        // Moist Air - Spillways (Power 2G)
+        registrar.playToServer(MoistAirToggleC2S.TYPE, MoistAirToggleC2S.STREAM_CODEC, GestaltNetworking::handleMoistAirToggle);
+        registrar.playToClient(MoistAirStateSyncS2C.TYPE, MoistAirStateSyncS2C.STREAM_CODEC, GestaltNetworking::handleMoistAirStateSync);
         // Phase Court (Power 3G)
         registrar.playToClient(SyncPhaseCourtS2C.TYPE, SyncPhaseCourtS2C.STREAM_CODEC, GestaltNetworking::handleSyncPhaseCourt);
         // Time Phase (Power 3S)
@@ -887,6 +891,30 @@ public class GestaltNetworking {
     /** Client-side callback invoked when Phase Out state changes. */
     public static java.util.function.Consumer<PhaseOutStateSyncS2C> onPhaseOutStateCallback = null;
 
+    // ── Moist Air - Spillways (Power 2G) ─────────────────────────────────────
+
+    private static void handleMoistAirToggle(MoistAirToggleC2S packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (ctx.player() instanceof ServerPlayer serverPlayer) {
+                SpillwaysPower2G.toggle(serverPlayer);
+            }
+        });
+    }
+
+    private static void handleMoistAirStateSync(MoistAirStateSyncS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            net.minecraft.world.entity.player.Player player = ctx.player();
+            PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+            state.setMoistAirActive(packet.active());
+            player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
+            net.ragdot.gestaltresonance.client.GestaltResonanceHud.onMoistAirState(packet);
+            if (onMoistAirStateCallback != null) onMoistAirStateCallback.accept(packet);
+        });
+    }
+
+    /** Client-side callback invoked when Moist Air state changes. */
+    public static java.util.function.Consumer<MoistAirStateSyncS2C> onMoistAirStateCallback = null;
+
     // ── Phase Court (Power 3G) ────────────────────────────────────────────────
 
     public static java.util.function.Consumer<SyncPhaseCourtS2C> onPhaseCourtStateCallback = null;
@@ -1076,5 +1104,11 @@ public class GestaltNetworking {
                         state.isPhaseOutActive(),
                         state.getPhaseOutCooldownTicks(),
                         canAfford));
+    }
+
+    /** Send the current Moist Air state to the owning player's client. */
+    public static void syncMoistAirToPlayer(ServerPlayer serverPlayer) {
+        PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+        PacketDistributor.sendToPlayer(serverPlayer, new MoistAirStateSyncS2C(state.isMoistAirActive()));
     }
 }

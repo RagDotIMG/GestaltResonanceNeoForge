@@ -53,6 +53,7 @@ import net.ragdot.gestaltresonance.common.entity.DrowningDamageTracker;
 import net.ragdot.gestaltresonance.common.SpillwaysLightManager;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2B;
+import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2G;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
 import net.ragdot.gestaltresonance.common.GestaltResonanceEvents;
 import net.ragdot.gestaltresonance.common.GestaltAttachments;
@@ -191,6 +192,7 @@ public class GestaltResonance {
         NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower3G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower3S.EVENT_LISTENER);
+        NeoForge.EVENT_BUS.register(SpillwaysPower2G.EVENT_LISTENER);
 
         // Config
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -242,6 +244,7 @@ public class GestaltResonance {
             AmenBreakPower2G.disarm(player);
             AmenBreakPower3G.disarm(player);
             AmenBreakPower3S.disarm(player);
+            SpillwaysPower2G.disarm(player);
             if (state.isSummoned()) {
                 // Deactivate passive before clearing summon
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
@@ -287,6 +290,7 @@ public class GestaltResonance {
         AmenBreakPower2G.disarm(player);
         AmenBreakPower3G.disarm(player);
         AmenBreakPower3S.disarm(player);
+        SpillwaysPower2G.disarm(player);
         PhaseBlossomEntity.dismissBlossom(player.serverLevel(), player.getUUID());
         dismissAllOwnedBodyDoubles(player);
 
@@ -324,6 +328,7 @@ public class GestaltResonance {
         GestaltNetworking.syncSelectedSkinToTracking(player);
         GestaltNetworking.syncUnlockedSkinsToOwner(player);
         GestaltNetworking.syncPhaseOutToPlayer(player);
+        GestaltNetworking.syncMoistAirToPlayer(player);
         GestaltNetworking.syncPhaseCourtToPlayer(player);
         GestaltNetworking.syncTimePhaseToPlayer(player);
     }
@@ -344,6 +349,7 @@ public class GestaltResonance {
         GestaltDelayedPlacer.tick(server);
         DrowningDamageTracker.tick(server);
         SpillwaysLightManager.tick(server);
+        SpillwaysPower2G.flushRestorations();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             LedgeGrabLogic.tickPlayer(player);
             WallSlideLogic.tickPlayer(player);
@@ -352,6 +358,7 @@ public class GestaltResonance {
             AmenBreakPower2G.tick(player);
             AmenBreakPower3G.tick(player);
             AmenBreakPower3S.tick(player);
+            SpillwaysPower2G.tick(player);
 
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (player.isCreative()) {

@@ -10,7 +10,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -76,6 +78,14 @@ public class GestaltAcquisitionEvents {
      *
      * Used by hunger crash, fall break crash, and any future crash-trigger.
      */
+    private static boolean isAlertServerSide(ServerPlayer player) {
+        if (player.hurtTime > 0) return true;
+        double r = GestaltCosts.ALERT_NEARBY_ENEMY_RADIUS;
+        AABB box = player.getBoundingBox().inflate(r);
+        return !player.level().getEntitiesOfClass(Monster.class, box,
+                e -> e.isAlive() && e.distanceTo(player) <= r).isEmpty();
+    }
+
     public static void crashGestalt(ServerPlayer player) {
         PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         if (!state.isSummoned()) return;
@@ -269,19 +279,30 @@ public class GestaltAcquisitionEvents {
 
     // ── Server tick: drain XP while dormant + exhaustion while summoned ──
     private int drainTickCounter = 0;
-    private int exhaustTickCounter = 0;
+    private int calmExhaustTick = 0;
+    private int alertExhaustTick = 0;
     private int decayTickCounter = 0;
 
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
-        // --- Summoned exhaustion drain (every 5 ticks) ---
-        exhaustTickCounter++;
-        if (exhaustTickCounter >= GestaltCosts.SUMMON_DRAIN_INTERVAL) {
-            exhaustTickCounter = 0;
+        // --- Summoned exhaustion drain (rate depends on CALM vs ALERT context) ---
+        calmExhaustTick++;
+        alertExhaustTick++;
+        if (calmExhaustTick >= GestaltCosts.SUMMON_DRAIN_CALM_INTERVAL) {
+            calmExhaustTick = 0;
             for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
                 PlayerGestaltState st = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
-                if (st.isSummoned()) {
-                    player.causeFoodExhaustion(GestaltCosts.SUMMON_DRAIN);
+                if (st.isSummoned() && !isAlertServerSide(player)) {
+                    player.causeFoodExhaustion(GestaltCosts.SUMMON_DRAIN_CALM);
+                }
+            }
+        }
+        if (alertExhaustTick >= GestaltCosts.SUMMON_DRAIN_ALERT_INTERVAL) {
+            alertExhaustTick = 0;
+            for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                PlayerGestaltState st = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
+                if (st.isSummoned() && isAlertServerSide(player)) {
+                    player.causeFoodExhaustion(GestaltCosts.SUMMON_DRAIN_ALERT);
                 }
             }
         }

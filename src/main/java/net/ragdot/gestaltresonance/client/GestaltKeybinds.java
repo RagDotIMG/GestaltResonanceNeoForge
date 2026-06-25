@@ -53,6 +53,8 @@ import net.ragdot.gestaltresonance.common.PlayerGestaltState;
 import net.ragdot.gestaltresonance.client.PhaseCourtClientHandler;
 import net.ragdot.gestaltresonance.client.SoulProjectionClientHandler;
 import net.ragdot.gestaltresonance.common.SoulProjectionExitType;
+import net.ragdot.gestaltresonance.common.GestaltIds;
+import net.ragdot.gestaltresonance.common.network.MoistAirToggleC2S;
 import net.ragdot.gestaltresonance.common.network.PhaseOutToggleC2S;
 import net.ragdot.gestaltresonance.common.network.PowerActivateC2S;
 import net.ragdot.gestaltresonance.common.network.SoulProjectionActivateC2S;
@@ -149,7 +151,7 @@ public class GestaltKeybinds {
         while (SUMMON_TOGGLE.get().consumeClick()) {
             if (state.isSoulProjecting()) {
                 PacketDistributor.sendToServer(new SoulProjectionExitC2S(SoulProjectionExitType.EMERGENCY.toByte()));
-            } else if (state.isGuarding()) {
+            } else if (mc.options.keyUse.isDown()) {
                 PacketDistributor.sendToServer(new SoulProjectionActivateC2S());
             } else if (!sneakHeld && !summonToggleSent) {
                 PacketDistributor.sendToServer(new ToggleSummonC2S());
@@ -157,19 +159,24 @@ public class GestaltKeybinds {
             }
         }
         while (POWER_1.get().consumeClick()) {
-            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte()));
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte(), mc.options.keyUse.isDown()));
         }
         while (POWER_2.get().consumeClick()) {
-            // X+Guard: toggle Phase Out armed state.
-            if (state.isGuarding()) {
-                PacketDistributor.sendToServer(new PhaseOutToggleC2S());
+            if (mc.options.keyUse.isDown()) {
+                // X+right-click: toggle gestalt-specific 2G power.
+                PlayerGestaltState state2g = mc.player != null
+                        ? mc.player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get()) : null;
+                if (state2g != null && GestaltIds.SPILLWAYS.equals(state2g.getGestaltId())) {
+                    PacketDistributor.sendToServer(new MoistAirToggleC2S());
+                } else {
+                    PacketDistributor.sendToServer(new PhaseOutToggleC2S());
+                }
             } else {
-                // X+Sneak (or bare X): server determines the modifier from sneak state.
-                PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_2.toByte()));
+                PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_2.toByte(), false));
             }
         }
         while (POWER_3.get().consumeClick()) {
-            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_3.toByte()));
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_3.toByte(), mc.options.keyUse.isDown()));
         }
 
         // When right-click released: stop guard and reset the initiated flag
@@ -221,10 +228,9 @@ public class GestaltKeybinds {
         if (!state.isSummoned()) return;
         if (state.isSoulProjecting()) return;
 
-        // Suppress vanilla attack (and the block-break it would start) while the gestalt is
-        // in any combat action — chain hits, charged-strike windup, travel, or strike. The
-        // chain advances via keyAttack.consumeClick() in GestaltAttackClientEvents, which is
-        // independent of this event, so chain advancement keeps working.
+        // Suppress vanilla attack while in any active gestalt combat action, regardless of
+        // context state — a chain that started in ALERT must not leak vanilla melee if
+        // context transitions to CALM mid-sequence.
         if (event.isAttack()) {
             GestaltAction action = state.getAction();
             if (action == GestaltAction.HIT_1
@@ -238,6 +244,9 @@ public class GestaltKeybinds {
             }
             return;
         }
+
+        // In CALM state the gestalt does not intercept right-click interactions
+        if (state.isCalm()) return;
 
         if (!event.isUseItem()) return;
 
@@ -262,7 +271,6 @@ public class GestaltKeybinds {
         if (mc.hitResult instanceof EntityHitResult ehr && isHighPriorityEntity(ehr.getEntity())) return;
         if (mc.hitResult instanceof BlockHitResult bhr && mc.level != null) {
             if (isInteractiveBlock(mc.level, bhr.getBlockPos())) return;
-            if (isSafeToBuild(mc.player)) return;
         }
 
         // Low-priority interaction — cancel it and start guard
@@ -324,18 +332,6 @@ public class GestaltKeybinds {
         player.setData(GestaltAttachments.PLAYER_GESTALT_STATE.get(), state);
 
         PacketDistributor.sendToServer(new ThrowInputC2S());
-    }
-
-    private static final double SAFE_BUILD_RADIUS = 35.0;
-
-    private static boolean isSafeToBuild(net.minecraft.client.player.LocalPlayer player) {
-        if (!player.onGround() && player.getDeltaMovement().y < 0) return false;
-        boolean holdingBlock = player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem
-                || player.getOffhandItem().getItem() instanceof net.minecraft.world.item.BlockItem;
-        if (!holdingBlock) return false;
-        net.minecraft.world.phys.AABB scanBox = player.getBoundingBox().inflate(SAFE_BUILD_RADIUS);
-        return player.level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class, scanBox,
-                mob -> mob instanceof net.minecraft.world.entity.monster.Enemy && mob.isAlive()).isEmpty();
     }
 
     private static boolean isInteractiveBlock(Level level, BlockPos pos) {

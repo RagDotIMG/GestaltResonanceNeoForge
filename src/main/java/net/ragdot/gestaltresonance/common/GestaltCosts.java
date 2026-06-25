@@ -15,11 +15,15 @@ public final class GestaltCosts {
     // General gestalt
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Exhaustion applied every {@link #SUMMON_DRAIN_INTERVAL} ticks while a Gestalt is summoned. */
-    public static final float SUMMON_DRAIN = 0.5f;
+    /** Exhaustion applied every {@link #SUMMON_DRAIN_CALM_INTERVAL} ticks while summoned and in CALM context. */
+    public static final float SUMMON_DRAIN_CALM = 0.3f;
+    /** How often (in ticks) the calm summon drain fires. 180 ticks = 9 seconds. */
+    public static final int   SUMMON_DRAIN_CALM_INTERVAL = 180;
 
-    /** How often (in ticks) the summon drain fires. 200 ticks = 10 seconds. */
-    public static final int SUMMON_DRAIN_INTERVAL = 200;
+    /** Exhaustion applied every {@link #SUMMON_DRAIN_ALERT_INTERVAL} ticks while summoned and in ALERT context. */
+    public static final float SUMMON_DRAIN_ALERT = 0.6f;
+    /** How often (in ticks) the alert summon drain fires. 160 ticks = 8 seconds. */
+    public static final int   SUMMON_DRAIN_ALERT_INTERVAL = 160;
 
     /** Exhaustion applied each time the guard absorbs incoming damage. */
     public static final float GUARD_ACTIVATION = 1.5f;
