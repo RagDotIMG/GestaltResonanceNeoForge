@@ -159,7 +159,7 @@ public class GestaltKeybinds {
             }
         }
         while (POWER_1.get().consumeClick()) {
-            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte(), mc.options.keyUse.isDown()));
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_1.toByte()));
         }
         while (POWER_2.get().consumeClick()) {
             if (mc.options.keyUse.isDown()) {
@@ -172,11 +172,11 @@ public class GestaltKeybinds {
                     PacketDistributor.sendToServer(new PhaseOutToggleC2S());
                 }
             } else {
-                PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_2.toByte(), false));
+                PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_2.toByte()));
             }
         }
         while (POWER_3.get().consumeClick()) {
-            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_3.toByte(), mc.options.keyUse.isDown()));
+            PacketDistributor.sendToServer(new PowerActivateC2S(GestaltPowerSlot.POWER_3.toByte()));
         }
 
         // When right-click released: stop guard and reset the initiated flag
@@ -245,8 +245,8 @@ public class GestaltKeybinds {
             return;
         }
 
-        // In CALM state the gestalt does not intercept right-click interactions
-        if (state.isCalm()) return;
+        // In dormant state the gestalt does not intercept right-click interactions
+        if (state.isDormant()) return;
 
         if (!event.isUseItem()) return;
 
