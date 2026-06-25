@@ -44,6 +44,7 @@ import net.ragdot.gestaltresonance.client.entity.PhaseAfterimageRenderer;
 import net.ragdot.gestaltresonance.client.entity.PhaseMineModel;
 import net.ragdot.gestaltresonance.client.entity.PhaseMineRenderer;
 import net.ragdot.gestaltresonance.common.GestaltEntities;
+import net.ragdot.gestaltresonance.client.DominionBubbleRenderer;
 import net.ragdot.gestaltresonance.client.GestaltResonanceHud;
 import net.ragdot.gestaltresonance.client.GestaltFirstPersonRenderer;
 import net.ragdot.gestaltresonance.client.GestaltXpOverlay;
@@ -94,6 +95,9 @@ public class GestaltResonanceClient {
         NeoForge.EVENT_BUS.addListener(GestaltXpOverlay::onRenderGuiLayer);
         NeoForge.EVENT_BUS.addListener(GestaltCooldownHud::onRenderGuiLayer);
         NeoForge.EVENT_BUS.addListener(GestaltResonanceHud::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(DominionBubbleRenderer::onRenderLivingPre);
+        NeoForge.EVENT_BUS.addListener(DominionBubbleRenderer::onRenderLiving);
+        NeoForge.EVENT_BUS.addListener(DominionBubbleRenderer::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(GestaltStatusHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SoulProjectionClientHandler::onCameraAngles);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, true, PhaseCourtClientHandler::onFogColor);
@@ -158,6 +162,11 @@ public class GestaltResonanceClient {
 
         // Bridge: soul projection yank → shake intensity + sound vary by exit type.
         GestaltNetworking.onSoulProjectionYankCallback = SoulProjectionClientHandler::onYank;
+
+        // Bridge: Dominion state change → show/hide bubble overlay.
+        GestaltNetworking.onDominionStateCallback = DominionBubbleRenderer::onSync;
+        // Bridge: stored passive mob changed → update miniature display.
+        GestaltNetworking.onDominionStoredMobCallback = DominionBubbleRenderer::onStoredMobSync;
 
         // Bridge: Phase Out state change → activation shake when ghost window starts.
         GestaltNetworking.onPhaseOutStateCallback = GestaltResonanceClient::onPhaseOutState;

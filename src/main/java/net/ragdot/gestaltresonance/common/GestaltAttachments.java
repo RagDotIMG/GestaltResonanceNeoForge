@@ -1,7 +1,9 @@
 package net.ragdot.gestaltresonance.common;
 
+import java.util.ArrayList;
 import java.util.function.Supplier;
 
+import net.minecraft.nbt.CompoundTag;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -24,6 +26,14 @@ public class GestaltAttachments {
             ATTACHMENT_TYPES.register("mob_seeded_data", () ->
                     AttachmentType.builder(MobSeededData::new)
                             .serialize(MobSeededData.CODEC)
+                            .build()
+            );
+
+    public static final Supplier<AttachmentType<ArrayList<CompoundTag>>> DOMINION_STORED_MOBS =
+            ATTACHMENT_TYPES.register("dominion_stored_mobs", () ->
+                    AttachmentType.builder((Supplier<ArrayList<CompoundTag>>) ArrayList::new)
+                            .serialize(CompoundTag.CODEC.listOf().xmap(ArrayList::new, l -> l))
+                            .copyOnDeath()
                             .build()
             );
 }

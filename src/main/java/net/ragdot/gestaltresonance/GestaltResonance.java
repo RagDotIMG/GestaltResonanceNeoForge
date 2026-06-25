@@ -52,6 +52,7 @@ import net.ragdot.gestaltresonance.common.entity.PhaseBlossomEntity;
 import net.ragdot.gestaltresonance.common.entity.DrowningDamageTracker;
 import net.ragdot.gestaltresonance.common.SpillwaysLightManager;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1B;
+import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower1G;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2B;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2G;
 import net.ragdot.gestaltresonance.common.GestaltAttackEvents;
@@ -187,6 +188,7 @@ public class GestaltResonance {
         AmenBreakPower3G.register();
         AmenBreakPower3S.register();
         SpillwaysPower1B.register();
+        SpillwaysPower1G.register();
         SpillwaysPower2B.register();
         NeoForge.EVENT_BUS.register(AmenBreakPower1G.EVENT_LISTENER);
         NeoForge.EVENT_BUS.register(AmenBreakPower2G.EVENT_LISTENER);
@@ -214,6 +216,11 @@ public class GestaltResonance {
             GestaltNetworking.syncUnlockedSkinsToOwner(joiningPlayer);
             // Re-apply dormant effect if player is still dormant after relog
             GestaltMobEffects.syncDormantEffect(joiningPlayer);
+            // Restore stored passive mob miniature display after relog
+            var storedMobs = joiningPlayer.getData(GestaltAttachments.DOMINION_STORED_MOBS.get());
+            if (!storedMobs.isEmpty()) {
+                GestaltNetworking.syncStoredMobToPlayer(joiningPlayer, storedMobs.get(0));
+            }
 
             // Sync all other players' states to the joining player
             var server = joiningPlayer.getServer();
@@ -245,6 +252,7 @@ public class GestaltResonance {
             AmenBreakPower3G.disarm(player);
             AmenBreakPower3S.disarm(player);
             SpillwaysPower2G.disarm(player);
+            SpillwaysPower1G.disarm(player);
             if (state.isSummoned()) {
                 // Deactivate passive before clearing summon
                 GestaltPassive passive = GestaltPassiveRegistry.getPassive(state.getGestaltId());
@@ -331,6 +339,11 @@ public class GestaltResonance {
         GestaltNetworking.syncMoistAirToPlayer(player);
         GestaltNetworking.syncPhaseCourtToPlayer(player);
         GestaltNetworking.syncTimePhaseToPlayer(player);
+        // Restore stored passive mob miniature display after dimension change
+        var storedMobs = player.getData(GestaltAttachments.DOMINION_STORED_MOBS.get());
+        if (!storedMobs.isEmpty()) {
+            GestaltNetworking.syncStoredMobToPlayer(player, storedMobs.get(0));
+        }
     }
 
     /** When a player starts tracking another player, sync the tracked player's gestalt state. */
@@ -359,6 +372,7 @@ public class GestaltResonance {
             AmenBreakPower3G.tick(player);
             AmenBreakPower3S.tick(player);
             SpillwaysPower2G.tick(player);
+            SpillwaysPower1G.tick(player);
 
             PlayerGestaltState state = player.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
             if (player.isCreative()) {

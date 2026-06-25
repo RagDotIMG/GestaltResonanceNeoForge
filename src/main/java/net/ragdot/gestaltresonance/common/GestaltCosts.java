@@ -192,6 +192,16 @@ public final class GestaltCosts {
     /** Health (half-hearts * 2) at or below which LOSS_NEAR_DEATH triggers: 3 hearts = 6 health. */
     public static final float LOSS_NEAR_DEATH_THRESHOLD      = 6.0f;
 
+    // Context state
+    /** Radius (blocks) — any Enemy within this sphere triggers ALERT immediately. */
+    public static final double ALERT_NEARBY_ENEMY_RADIUS    = 10.0;
+    /** Radius (blocks) — an Enemy within this sphere that is targeting the player triggers ALERT. */
+    public static final double ALERT_TARGETED_ENEMY_RADIUS  = 30.0;
+    /** Ticks ALERT persists after the last damage hit (resets on each new hit). */
+    public static final int    ALERT_DAMAGE_DECAY_TICKS     = 100;
+    /** Ticks ALERT persists after the last targeting detection poll (resets each poll cycle). */
+    public static final int    ALERT_TARGETED_DECAY_TICKS   = 200;
+
     // Decay
     public static final int DECAY_SUMMONED_HOSTILE_INTERVAL   = 23;
     public static final int DECAY_SUMMONED_NO_HOSTILE_INTERVAL = 18;
@@ -650,6 +660,20 @@ public final class GestaltCosts {
 
     /** Raytrace reach for water manipulation (blocks). */
     public static final int SPILLWAYS_LACHRYMA_RANGE = 7;
+
+    // ── Spillways Dominion (Power 1G) ─────────────────────────────────────────
+
+    /** Gestalt XP cost paid at activation. */
+    public static final int DOMINION_XP_COST = 5;
+
+    /** Cooldown applied at activation, in ticks (5 seconds). */
+    public static final int DOMINION_COOLDOWN_TICKS = 100;
+
+    /** Raytrace reach for target selection (blocks). */
+    public static final double DOMINION_RANGE = 6.0;
+
+    /** Gestalt level at which the simultaneous target cap increases from 1 to 2. */
+    public static final int DOMINION_CAP_LEVEL = 10;
 
     // ── Light levels ──────────────────────────────────────────────────────────
 

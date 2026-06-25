@@ -35,10 +35,13 @@ import net.ragdot.gestaltresonance.common.power.GestaltPowerRegistry;
 import net.ragdot.gestaltresonance.common.power.GestaltPowerSlot;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower2G;
 import net.ragdot.gestaltresonance.common.power.spillways.SpillwaysPower2G;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.server.level.ServerLevel;
 import net.ragdot.gestaltresonance.common.power.amen_break.AmenBreakPower3G;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassive;
 import net.ragdot.gestaltresonance.common.passive.GestaltPassiveRegistry;
 
+import net.minecraft.nbt.CompoundTag;
 import javax.annotation.Nullable;
 import java.util.Optional;
 
@@ -109,6 +112,8 @@ public class GestaltNetworking {
         // Moist Air - Spillways (Power 2G)
         registrar.playToServer(MoistAirToggleC2S.TYPE, MoistAirToggleC2S.STREAM_CODEC, GestaltNetworking::handleMoistAirToggle);
         registrar.playToClient(MoistAirStateSyncS2C.TYPE, MoistAirStateSyncS2C.STREAM_CODEC, GestaltNetworking::handleMoistAirStateSync);
+        registrar.playToClient(DominionStateSyncS2C.TYPE, DominionStateSyncS2C.STREAM_CODEC, GestaltNetworking::handleDominionStateSync);
+        registrar.playToClient(DominionStoredMobSyncS2C.TYPE, DominionStoredMobSyncS2C.STREAM_CODEC, GestaltNetworking::handleDominionStoredMobSync);
         // Phase Court (Power 3G)
         registrar.playToClient(SyncPhaseCourtS2C.TYPE, SyncPhaseCourtS2C.STREAM_CODEC, GestaltNetworking::handleSyncPhaseCourt);
         // Time Phase (Power 3S)
@@ -1110,5 +1115,39 @@ public class GestaltNetworking {
     public static void syncMoistAirToPlayer(ServerPlayer serverPlayer) {
         PlayerGestaltState state = serverPlayer.getData(GestaltAttachments.PLAYER_GESTALT_STATE.get());
         PacketDistributor.sendToPlayer(serverPlayer, new MoistAirStateSyncS2C(state.isMoistAirActive()));
+    }
+
+    // ── Dominion (Spillways 1G) ───────────────────────────────────────────────
+
+    private static void handleDominionStateSync(DominionStateSyncS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onDominionStateCallback != null) onDominionStateCallback.accept(packet);
+        });
+    }
+
+    /** Client-side callback invoked when a Dominion bubble is applied or removed. */
+    public static java.util.function.Consumer<DominionStateSyncS2C> onDominionStateCallback = null;
+
+    private static void handleDominionStoredMobSync(DominionStoredMobSyncS2C packet, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (onDominionStoredMobCallback != null) onDominionStoredMobCallback.accept(packet);
+        });
+    }
+
+    /** Client-side callback invoked when the stored passive mob slot changes. */
+    public static java.util.function.Consumer<DominionStoredMobSyncS2C> onDominionStoredMobCallback = null;
+
+    /** Send the stored mob NBT to the owning player. Pass an empty CompoundTag to clear. */
+    public static void syncStoredMobToPlayer(ServerPlayer player, CompoundTag nbt) {
+        PacketDistributor.sendToPlayer(player, new DominionStoredMobSyncS2C(nbt));
+    }
+
+    /** Broadcast Dominion state change to all players in the entity's level. */
+    public static void syncDominionState(LivingEntity entity, boolean active) {
+        if (!(entity.level() instanceof ServerLevel sl)) return;
+        DominionStateSyncS2C packet = new DominionStateSyncS2C(entity.getId(), active);
+        for (ServerPlayer p : sl.players()) {
+            PacketDistributor.sendToPlayer(p, packet);
+        }
     }
 }
